@@ -1,8 +1,10 @@
 """
 LINE 일정 관리 비서 봇
 메시지 수신 → Gemini로 분석 → Supabase chats 테이블 저장
+조회 요청 시 Supabase에서 일정 요약 답장
 """
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
@@ -136,13 +138,152 @@ def reply_to_line(reply_token: str, text: str) -> None:
         print(f"[LINE 답장 실패] {e}")
 
 
+# 일정 조회 요청으로 볼 키워드 (짧은 메시지일 때만)
+SCHEDULE_QUERY_KEYWORDS = ("일정", "약속", "정리해", "뭐야", "있어", "알려", "보여", "확인")
+# 미완료 업무 조회 요청
+TASK_QUERY_KEYWORDS = ("할일", "해야", "업무", "미완료", "todo", "해야 할", "해야할", "과제", "뭐 해야")
+# 일정으로 분류할 분석/메시지 키워드 (대시보드와 동일)
+SCHEDULE_CONTENT_KEYWORDS = (
+    "일정", "회의", "약속", "미팅", "예약", "날짜", "오전", "오후", "시", "캘린더",
+    "내일", "모레", "다음 주", "다음주", "회의실", "화상",
+)
+TASK_CONTENT_KEYWORDS = (
+    "할일", "해야", "업무", "미완료", "todo", "해야 할", "해야할", "과제", "제출", "마감",
+)
+
+
+def is_schedule_query(text: str) -> bool:
+    """일정/약속 조회 요청인지 판별."""
+    t = text.strip()
+    if len(t) > 60:
+        return False
+    return any(k in t for k in SCHEDULE_QUERY_KEYWORDS)
+
+
+def is_task_query(text: str) -> bool:
+    """미완료 업무 조회 요청인지 판별."""
+    t = text.strip()
+    if len(t) > 60:
+        return False
+    return any(k in t for k in TASK_QUERY_KEYWORDS)
+
+
+def fetch_chats_from_supabase(limit: int = 50) -> list[dict]:
+    """Supabase chats 최근 N건 조회."""
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/chats"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+    params = {
+        "select": "raw_message,gemini_analysis,created_at",
+        "order": "created_at.desc",
+        "limit": str(limit),
+    }
+    resp = requests.get(url, headers=headers, params=params, timeout=15)
+    if resp.status_code >= 400:
+        return []
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+def filter_schedule_rows(rows: list[dict]) -> list[dict]:
+    """일정 관련 행만 필터."""
+    out = []
+    for r in rows:
+        combined = ((r.get("gemini_analysis") or "") + " " + (r.get("raw_message") or "")).lower()
+        if any(k in combined for k in SCHEDULE_CONTENT_KEYWORDS):
+            out.append(r)
+    return out
+
+
+def filter_task_rows(rows: list[dict]) -> list[dict]:
+    """미완료 업무 관련 행만 필터."""
+    out = []
+    for r in rows:
+        combined = ((r.get("gemini_analysis") or "") + " " + (r.get("raw_message") or "")).lower()
+        if any(k in combined for k in TASK_CONTENT_KEYWORDS):
+            out.append(r)
+    return out
+
+
+def format_schedule_reply(rows: list[dict], max_len: int = 4500) -> str:
+    """LINE 메시지 길이 제한에 맞춰 일정 요약 문자열 생성."""
+    if not rows:
+        return "📅 아직 저장된 일정이 없어요. 채팅에서 일정을 말해 주시면 저장해 둘게요."
+    lines = ["📅 저장된 일정이에요.\n"]
+    for r in rows[:20]:
+        msg = (r.get("raw_message") or "").strip()
+        if not msg:
+            continue
+        created = r.get("created_at") or ""
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            time_str = dt.strftime("%m/%d %H:%M")
+        except Exception:
+            time_str = created[:16] if created else ""
+        lines.append(f"• {msg}")
+        if time_str:
+            lines.append(f"  ({time_str})")
+    text = "\n".join(lines)
+    return text[:max_len] + ("..." if len(text) > max_len else "")
+
+
+def format_task_reply(rows: list[dict], max_len: int = 4500) -> str:
+    """LINE 메시지 길이 제한에 맞춰 미완료 업무 요약 문자열 생성."""
+    if not rows:
+        return "📋 아직 수집된 미완료 업무가 없어요. 할 일을 채팅에 말해 주시면 저장해 둘게요."
+    lines = ["📋 미완료 업무예요.\n"]
+    for r in rows[:20]:
+        msg = (r.get("raw_message") or "").strip()
+        if not msg:
+            continue
+        created = r.get("created_at") or ""
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            time_str = dt.strftime("%m/%d %H:%M")
+        except Exception:
+            time_str = created[:16] if created else ""
+        lines.append(f"• {msg}")
+        if time_str:
+            lines.append(f"  ({time_str})")
+    text = "\n".join(lines)
+    return text[:max_len] + ("..." if len(text) > max_len else "")
+
+
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event: MessageEvent):
-    """텍스트 수신 시 Gemini 분석 → Supabase 저장 → LINE 답장."""
+    """텍스트 수신: 조회 요청이면 일정/업무 요약 답장, 아니면 분석·저장 후 답장."""
     user_id = getattr(event.source, "user_id", None)
     group_id = getattr(event.source, "group_id", None)
-    text = event.message.text
+    text = (event.message.text or "").strip()
 
+    # 미완료 업무 조회 요청
+    if is_task_query(text):
+        try:
+            rows = fetch_chats_from_supabase(limit=80)
+            task_rows = filter_task_rows(rows)
+            reply_text = format_task_reply(task_rows)
+            reply_to_line(event.reply_token, reply_text)
+        except Exception as e:
+            print(f"[업무 조회 실패] {e}")
+            reply_to_line(event.reply_token, "미완료 업무를 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+        return
+
+    # 일정/약속 조회 요청
+    if is_schedule_query(text):
+        try:
+            rows = fetch_chats_from_supabase(limit=80)
+            schedule_rows = filter_schedule_rows(rows)
+            reply_text = format_schedule_reply(schedule_rows)
+            reply_to_line(event.reply_token, reply_text)
+        except Exception as e:
+            print(f"[일정 조회 실패] {e}")
+            reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+        return
+
+    # 일반 메시지: Gemini 분석 → 저장 → 답장
     analysis = analyze_with_gemini(text)
     try:
         save_to_supabase(
