@@ -7,7 +7,7 @@ type AIBriefingProps = {
 export default function AIBriefing({ totalTasks, dueTodayCount, dueTodayExample }: AIBriefingProps) {
   const line =
     totalTasks === 0
-      ? "대표님, 아직 수집된 업무가 없어요. 채팅에 할 일을 말씀해 주시면 정리해 드릴게요."
+      ? "대표님, 아직 수집된 업무가 없어요."
       : dueTodayCount > 0 && dueTodayExample
         ? `대표님, 오늘 마감인 ${dueTodayExample} 포함 총 ${totalTasks}개의 업무가 있습니다.`
         : `대표님, 총 ${totalTasks}개의 업무가 있습니다.`;

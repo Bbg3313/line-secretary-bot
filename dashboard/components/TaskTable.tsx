@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { TaskRow } from "@/lib/supabase";
+import type { TaskDisplayRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 
 function formatDeadline(deadline: string | null): string {
@@ -24,10 +24,11 @@ function statusLabel(s: string): string {
   return "대기";
 }
 
-export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
+export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
   const router = useRouter();
 
-  async function toggleDone(id: string, current: string) {
+  async function toggleDone(id: string, current: string, fromTasksTable: boolean) {
+    if (!fromTasksTable) return; // 채팅에서 온 행은 tasks 테이블에 없어서 업데이트 불가
     const next = current === "done" ? "pending" : "done";
     const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
     if (!error) router.refresh();
@@ -48,25 +49,27 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
         <span className="text-2xl" aria-hidden>📋</span>
         업무 관리
       </h2>
-      {sorted.length === 0 ? (
-        <p className="rounded-lg border border-slate-700/80 bg-slate-800/30 py-8 text-center text-slate-500">
-          아직 수집된 업무가 없어요.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-600/80 bg-slate-800/40">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-600/80 bg-slate-700/50">
-                <th className="w-10 px-3 py-3 font-medium text-slate-400">완료</th>
-                <th className="px-4 py-3 font-medium text-slate-400">병원명</th>
-                <th className="w-24 px-4 py-3 font-medium text-slate-400">업무유형</th>
-                <th className="w-28 px-4 py-3 font-medium text-slate-400">마감기한</th>
-                <th className="w-20 px-4 py-3 font-medium text-slate-400">상태</th>
-                <th className="px-4 py-3 font-medium text-slate-400">제목</th>
+      <div className="overflow-x-auto rounded-lg border border-slate-600/80 bg-slate-800/40">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-600/80 bg-slate-700/50">
+              <th className="w-10 px-3 py-3 font-medium text-slate-400">완료</th>
+              <th className="px-4 py-3 font-medium text-slate-400">병원명</th>
+              <th className="w-24 px-4 py-3 font-medium text-slate-400">업무유형</th>
+              <th className="w-28 px-4 py-3 font-medium text-slate-400">마감기한</th>
+              <th className="w-20 px-4 py-3 font-medium text-slate-400">상태</th>
+              <th className="px-4 py-3 font-medium text-slate-400">제목</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-slate-500">
+                  아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 자동으로 채워져요.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {sorted.map((row) => (
+            ) : (
+              sorted.map((row) => (
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/60 last:border-0 hover:bg-slate-700/30 transition ${
@@ -77,8 +80,9 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                     <input
                       type="checkbox"
                       checked={row.status === "done"}
-                      onChange={() => toggleDone(row.id, row.status)}
-                      className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
+                      disabled={row.fromTasksTable === false}
+                      onChange={() => toggleDone(row.id, row.status, row.fromTasksTable !== false)}
+                      className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
                     />
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-200">
@@ -107,11 +111,11 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                     {row.title}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

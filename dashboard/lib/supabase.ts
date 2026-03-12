@@ -27,3 +27,6 @@ export type TaskRow = {
   deadline: string | null;
   created_at: string;
 };
+
+/** tasks 테이블 행 + 채팅에서 합쳐진 업무(표시용). fromTasksTable=false면 채팅 출처, 체크박스 비활성 */
+export type TaskDisplayRow = TaskRow & { fromTasksTable?: boolean };

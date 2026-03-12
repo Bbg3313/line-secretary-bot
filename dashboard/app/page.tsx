@@ -1,6 +1,6 @@
-import type { ChatRow, TaskRow } from "@/lib/supabase";
+import type { ChatRow, TaskDisplayRow, TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { getScheduleChats } from "@/lib/classify";
+import { getScheduleChats, getTaskChats } from "@/lib/classify";
 import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST } from "@/lib/scheduleUtils";
 import SummaryCards from "@/components/SummaryCards";
 import AIBriefing from "@/components/AIBriefing";
@@ -35,13 +35,40 @@ async function getTasks() {
 }
 
 export default async function DashboardPage() {
-  const [chats, tasks] = await Promise.all([getChats(), getTasks()]);
+  const [chats, tasksFromDb] = await Promise.all([getChats(), getTasks()]);
   const scheduleChats = getScheduleChats(chats);
+  const taskChats = getTaskChats(chats);
   const todayKey = getTodayDateKeyKST();
 
+  // tasks 테이블 행 + 채팅에서 업무로 분류된 항목 합침 (Supabase에 쌓인 기존 데이터도 표시)
+  const tasksFromChats: TaskDisplayRow[] = taskChats.map((c) => ({
+    id: c.id,
+    chat_id: c.id,
+    line_user_id: c.line_user_id,
+    line_group_id: c.line_group_id,
+    source_message: c.raw_message,
+    title: c.raw_message,
+    hospital_name: null,
+    task_type: null,
+    status: "pending",
+    deadline: null,
+    created_at: c.created_at,
+    fromTasksTable: false,
+  }));
+  const tasksWithFromFlag: TaskDisplayRow[] = [
+    ...tasksFromDb.map((t) => ({ ...t, fromTasksTable: true })),
+    ...tasksFromChats.filter((tc) => !tasksFromDb.some((td) => td.chat_id === tc.id)), // 이미 tasks에 있으면 채팅 행 제외
+  ];
+  const tasks = tasksWithFromFlag.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
   const totalTasks = tasks.length;
-  const dueTodayCount = tasks.filter((t) => isDeadlineTodayKST(t.deadline)).length;
-  const dueTodayExample = tasks.find((t) => isDeadlineTodayKST(t.deadline))?.hospital_name || tasks.find((t) => isDeadlineTodayKST(t.deadline))?.title || null;
+  const dueTodayCount = tasksFromDb.filter((t) => isDeadlineTodayKST(t.deadline)).length;
+  const dueTodayExample =
+    tasksFromDb.find((t) => isDeadlineTodayKST(t.deadline))?.hospital_name ||
+    tasksFromDb.find((t) => isDeadlineTodayKST(t.deadline))?.title ||
+    null;
   const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
 
   return (
