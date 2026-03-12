@@ -13,3 +13,17 @@ export type ChatRow = {
   gemini_analysis: string | null;
   created_at: string;
 };
+
+export type TaskRow = {
+  id: string;
+  chat_id: string | null;
+  line_user_id: string | null;
+  line_group_id: string | null;
+  source_message: string | null;
+  title: string;
+  hospital_name: string | null;
+  task_type: string | null;
+  status: string;
+  deadline: string | null;
+  created_at: string;
+};

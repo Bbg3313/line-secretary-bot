@@ -1,9 +1,11 @@
 """
 LINE 일정 관리 비서 봇
-메시지 수신 → Gemini로 분석 → Supabase chats 테이블 저장
-조회 요청 시 Supabase에서 일정 요약 답장
+메시지 수신 → Gemini로 분석(원자화) → Supabase chats + tasks 테이블 저장
+조회 요청 시 Supabase에서 일정/업무 요약 답장
 """
+import json
 import os
+import re
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -49,7 +51,7 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 일정/할일 분석용 프롬프트
+# 일정/할일 분석용 프롬프트 (구 레거시)
 GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에서 짧게 분석해줘. 
 일정/시간/할일이 있으면 요약하고, 없으면 "일반 대화" 등 한 줄로 분류해줘. 
 한국어로 1~3문장 이내로 답해줘.
@@ -57,31 +59,70 @@ GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에
 메시지: {message}
 """
 
+# 원자화: 메시지에서 개별 업무(Task) 추출용 — 반드시 유효한 JSON만 출력
+GEMINI_EXTRACT_PROMPT = """다음 메시지에서 "할 일(Task)"을 개별 단위로 쪼개서 추출해줘.
+- summary: 전체를 한 줄로 요약 (예: "의원 광고·미팅 일정 3건")
+- tasks: 할 일이 있으면 배열로, 없으면 빈 배열 []
+  각 항목: title(업무 제목), hospital_name(병원/의원명, 없으면 null), task_type(광고|미팅|개인 중 하나, 없으면 null), deadline(마감일 YYYY-MM-DD, 없으면 null)
+반드시 아래 JSON 형식만 출력하고 다른 글은 넣지 마세요.
 
-def analyze_with_gemini(text: str) -> str:
-    """Gemini로 메시지 분석 후 분석 결과 문자열 반환."""
-    prompt = GEMINI_PROMPT_TEMPLATE.format(message=text)
+{"summary":"...","tasks":[{"title":"...","hospital_name":"... 또는 null","task_type":"광고|미팅|개인 또는 null","deadline":"YYYY-MM-DD 또는 null"}]}
 
-    # 계정/지역/권한에 따라 지원 모델이 달라 404가 날 수 있어 fallback 시도합니다.
+메시지:
+{message}
+"""
+
+
+def _call_gemini(prompt: str) -> str:
     candidates = []
     for m in [GEMINI_MODEL, "models/gemini-2.0-flash", "models/gemini-flash-latest", "models/gemini-pro-latest"]:
         if m and m not in candidates:
             candidates.append(m)
-
     last_err: Exception | None = None
     for model in candidates:
         try:
-            response = gemini_client.models.generate_content(
-                model=model,
-                contents=prompt,
-            )
+            response = gemini_client.models.generate_content(model=model, contents=prompt)
             text_out = getattr(response, "text", None)
-            return text_out.strip() if text_out else "(분석 없음)"
+            return (text_out or "").strip()
         except Exception as e:
             last_err = e
             continue
-
     return f"(Gemini 오류: {last_err})"
+
+
+def analyze_with_gemini(text: str) -> str:
+    """Gemini로 메시지 분석 후 분석 결과 문자열 반환."""
+    return _call_gemini(GEMINI_PROMPT_TEMPLATE.format(message=text))
+
+
+def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
+    """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. JSON 파싱 실패 시 요약만."""
+    raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(message=text))
+    summary = "일정·업무 요약"
+    tasks: list[dict] = []
+    # JSON 블록만 추출 (```json ... ``` 또는 그냥 {...})
+    json_match = re.search(r"\{[\s\S]*\}", raw)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            summary = (data.get("summary") or summary).strip() or summary
+            for t in data.get("tasks") or []:
+                if not isinstance(t, dict):
+                    continue
+                title = (t.get("title") or "").strip()
+                if not title:
+                    continue
+                tasks.append({
+                    "title": title,
+                    "hospital_name": (t.get("hospital_name") or "").strip() or None,
+                    "task_type": (t.get("task_type") or "").strip() or None,
+                    "deadline": (t.get("deadline") or "").strip() or None,
+                })
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if not summary or summary.startswith("(Gemini"):
+        summary = raw[:200] if raw else "분석 없음"
+    return summary, tasks
 
 
 def list_gemini_generate_models(limit: int = 30) -> list[str]:
@@ -106,8 +147,8 @@ def save_to_supabase(
     line_group_id: str | None,
     raw_message: str,
     gemini_analysis: str,
-) -> None:
-    """Supabase chats 테이블에 한 행 삽입."""
+) -> str | None:
+    """Supabase chats 테이블에 한 행 삽입. 삽입된 행의 id 반환."""
     row = {
         "line_user_id": line_user_id,
         "line_group_id": line_group_id,
@@ -119,11 +160,55 @@ def save_to_supabase(
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
-        "Prefer": "return=minimal",
+        "Prefer": "return=representation",
     }
     resp = requests.post(url, headers=headers, json=row, timeout=15)
     if resp.status_code >= 400:
         raise RuntimeError(f"Supabase insert failed: {resp.status_code} {resp.text}")
+    data = resp.json()
+    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict) and "id" in data[0]:
+        return str(data[0]["id"])
+    return None
+
+
+def save_tasks_to_supabase(
+    *,
+    chat_id: str | None,
+    line_user_id: str | None,
+    line_group_id: str | None,
+    source_message: str,
+    tasks: list[dict],
+) -> None:
+    """Supabase tasks 테이블에 업무 단위로 행 삽입."""
+    if not tasks:
+        return
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    for t in tasks:
+        title = (t.get("title") or "").strip()
+        if not title:
+            continue
+        row = {
+            "chat_id": chat_id,
+            "line_user_id": line_user_id,
+            "line_group_id": line_group_id,
+            "source_message": source_message,
+            "title": title,
+            "hospital_name": t.get("hospital_name"),
+            "task_type": t.get("task_type"),
+            "status": "pending",
+            "deadline": t.get("deadline") or None,
+        }
+        if row["deadline"] and len(row["deadline"]) == 10:
+            row["deadline"] = f"{row['deadline']}T23:59:59Z"
+        resp = requests.post(url, headers=headers, json=row, timeout=15)
+        if resp.status_code >= 400:
+            print(f"[tasks insert 경고] {resp.status_code} {resp.text}")
 
 
 def reply_to_line(reply_token: str, text: str) -> None:
@@ -188,6 +273,26 @@ def fetch_chats_from_supabase(limit: int = 50) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+def fetch_tasks_from_supabase(limit: int = 100) -> list[dict]:
+    """Supabase tasks 테이블에서 최근 N건 조회."""
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+    params = {
+        "select": "id,title,hospital_name,task_type,status,deadline,created_at",
+        "order": "created_at.desc",
+        "limit": str(limit),
+    }
+    resp = requests.get(url, headers=headers, params=params, timeout=15)
+    if resp.status_code >= 400:
+        return []
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
 def filter_schedule_rows(rows: list[dict]) -> list[dict]:
     """일정 관련 행만 필터."""
     out = []
@@ -231,23 +336,28 @@ def format_schedule_reply(rows: list[dict], max_len: int = 4500) -> str:
 
 
 def format_task_reply(rows: list[dict], max_len: int = 4500) -> str:
-    """LINE 메시지 길이 제한에 맞춰 미완료 업무 요약 문자열 생성."""
+    """LINE 메시지 길이 제한에 맞춰 미완료 업무 요약 문자열 생성. (tasks 테이블 행 또는 레거시 chat 행)"""
     if not rows:
         return "📋 아직 수집된 미완료 업무가 없어요. 할 일을 채팅에 말해 주시면 저장해 둘게요."
     lines = ["📋 미완료 업무예요.\n"]
     for r in rows[:20]:
-        msg = (r.get("raw_message") or "").strip()
-        if not msg:
+        title = (r.get("title") or r.get("raw_message") or "").strip()
+        if not title:
             continue
-        created = r.get("created_at") or ""
-        try:
-            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-            time_str = dt.strftime("%m/%d %H:%M")
-        except Exception:
-            time_str = created[:16] if created else ""
-        lines.append(f"• {msg}")
-        if time_str:
-            lines.append(f"  ({time_str})")
+        hospital = (r.get("hospital_name") or "").strip()
+        task_type = (r.get("task_type") or "").strip()
+        deadline = (r.get("deadline") or "").strip()[:10]
+        status = (r.get("status") or "").strip()
+        parts = [title]
+        if hospital:
+            parts.append(f"[{hospital}]")
+        if task_type:
+            parts.append(f"({task_type})")
+        if deadline:
+            parts.append(f"마감 {deadline}")
+        if status:
+            parts.append(f"- {status}")
+        lines.append("• " + " ".join(parts))
     text = "\n".join(lines)
     return text[:max_len] + ("..." if len(text) > max_len else "")
 
@@ -259,11 +369,13 @@ def handle_message(event: MessageEvent):
     group_id = getattr(event.source, "group_id", None)
     text = (event.message.text or "").strip()
 
-    # 미완료 업무 조회 요청
+    # 미완료 업무 조회 요청 (tasks 테이블 우선)
     if is_task_query(text):
         try:
-            rows = fetch_chats_from_supabase(limit=80)
-            task_rows = filter_task_rows(rows)
+            task_rows = fetch_tasks_from_supabase(limit=80)
+            if not task_rows:
+                chat_rows = fetch_chats_from_supabase(limit=80)
+                task_rows = filter_task_rows(chat_rows)
             reply_text = format_task_reply(task_rows)
             reply_to_line(event.reply_token, reply_text)
         except Exception as e:
@@ -283,17 +395,24 @@ def handle_message(event: MessageEvent):
             reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
         return
 
-    # 일반 메시지: Gemini 분석 → 저장 → 답장
-    analysis = analyze_with_gemini(text)
+    # 일반 메시지: Gemini 원자화 분석 → chats + tasks 저장 → 답장
+    summary, tasks = analyze_and_extract(text)
     try:
-        save_to_supabase(
+        chat_id = save_to_supabase(
             line_user_id=user_id,
             line_group_id=group_id,
             raw_message=text,
-            gemini_analysis=analysis,
+            gemini_analysis=summary,
         )
-        print(f"[저장] user={user_id}, group={group_id}, 분석={analysis[:50]}...")
-        reply_to_line(event.reply_token, "일정 저장했어요.")
+        save_tasks_to_supabase(
+            chat_id=chat_id,
+            line_user_id=user_id,
+            line_group_id=group_id,
+            source_message=text,
+            tasks=tasks,
+        )
+        print(f"[저장] user={user_id}, group={group_id}, summary={summary[:50]}..., tasks={len(tasks)}건")
+        reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
         print(f"[저장 실패] user={user_id}, group={group_id}, err={e}")
         reply_to_line(event.reply_token, "저장 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
@@ -302,14 +421,16 @@ def handle_message(event: MessageEvent):
 @app.post("/debug/insert")
 async def debug_insert():
     """Supabase 연결 확인용: 테스트 데이터 1건 삽입."""
-    analysis = analyze_with_gemini("내일 오후 3시에 치과 예약 잡아줘")
-    save_to_supabase(
+    text = "Clyve 의원 리포트 마감 내일, 삼성 병원 미팅 다음 주 수요일"
+    summary, tasks = analyze_and_extract(text)
+    chat_id = save_to_supabase(
         line_user_id="debug-user",
         line_group_id=None,
-        raw_message="내일 오후 3시에 치과 예약 잡아줘",
-        gemini_analysis=analysis,
+        raw_message=text,
+        gemini_analysis=summary,
     )
-    return {"status": "ok"}
+    save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, tasks=tasks)
+    return {"status": "ok", "summary": summary, "tasks_count": len(tasks)}
 
 
 @app.get("/debug/gemini-models")

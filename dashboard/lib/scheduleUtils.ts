@@ -72,6 +72,12 @@ export function getDateKeyKST(createdAt: string): string {
   }
 }
 
+/** 마감일(deadline)이 오늘(한국 시간)인지 여부 */
+export function isDeadlineTodayKST(deadline: string | null): boolean {
+  if (!deadline || !deadline.trim()) return false;
+  return getDateKeyKST(deadline) === getTodayDateKeyKST();
+}
+
 /** 일정 목록을 일자별로 묶고, 일자·시간 순 정렬 (오래된 일자 먼저, 같은 일자면 시간 순) */
 export function groupScheduleByDate(chats: ChatRow[]): { dateKey: string; dateLabel: string; items: ChatRow[] }[] {
   const sorted = [...chats].sort(
