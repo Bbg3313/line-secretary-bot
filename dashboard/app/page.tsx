@@ -41,7 +41,8 @@ export default async function DashboardPage() {
   const todayKey = getTodayDateKeyKST();
 
   // tasks 테이블 행 + 채팅에서 업무로 분류된 항목 합침 (Supabase에 쌓인 기존 데이터도 표시)
-  const tasksFromChats: TaskDisplayRow[] = taskChats.map((c) => ({
+  const baseChatsForTasks = taskChats.length > 0 ? taskChats : chats;
+  const tasksFromChats: TaskDisplayRow[] = baseChatsForTasks.map((c) => ({
     id: c.id,
     chat_id: c.id,
     line_user_id: c.line_user_id,
