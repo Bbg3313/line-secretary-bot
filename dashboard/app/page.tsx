@@ -25,9 +25,13 @@ export default async function DashboardPage() {
   const taskChats = getTaskChats(chats);
 
   return (
-    <main className="grid gap-8 lg:grid-cols-2">
-      <ScheduleSummary chats={scheduleChats} />
-      <IncompleteTasks chats={taskChats} />
+    <main className="space-y-8">
+      <section className="min-w-0">
+        <ScheduleSummary chats={scheduleChats} />
+      </section>
+      <section className="min-w-0 lg:max-w-2xl">
+        <IncompleteTasks chats={taskChats} />
+      </section>
     </main>
   );
 }
