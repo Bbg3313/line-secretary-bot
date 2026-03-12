@@ -1,3 +1,4 @@
+import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import { getScheduleChats } from "@/lib/classify";
 import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST } from "@/lib/scheduleUtils";
@@ -10,14 +11,14 @@ export const revalidate = 60;
 async function getChats() {
   const { data, error } = await supabase
     .from("chats")
-    .select("id, raw_message, gemini_analysis, created_at")
+    .select("id, line_user_id, line_group_id, raw_message, gemini_analysis, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
     console.error("Supabase chats error:", error);
     return [];
   }
-  return data ?? [];
+  return (data ?? []) as ChatRow[];
 }
 
 async function getTasks() {
@@ -30,7 +31,7 @@ async function getTasks() {
     console.error("Supabase tasks error:", error);
     return [];
   }
-  return data ?? [];
+  return (data ?? []) as TaskRow[];
 }
 
 export default async function DashboardPage() {
