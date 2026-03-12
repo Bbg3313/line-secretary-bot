@@ -3,15 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
+  --bg: #0c1222;
+  --fg: #e2e8f0;
+  --card: #151b2d;
+  --muted: #64748b;
+  --border: #334155;
   --accent: #38bdf8;
   --success: #34d399;
   --warning: #fbbf24;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@layer base {
+  .font-sans {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
 }
