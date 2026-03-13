@@ -31,9 +31,9 @@ from google.genai import errors as genai_errors
 
 load_dotenv()
 
-# LINE
-CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
-CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
+# LINE (환경 변수 앞뒤 공백/줄바꿈 제거 - Render 등에서 복붙 시 실패 방지)
+CHANNEL_SECRET = (os.getenv("CHANNEL_SECRET") or "").strip()
+CHANNEL_ACCESS_TOKEN = (os.getenv("CHANNEL_ACCESS_TOKEN") or "").strip()
 # Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
@@ -466,13 +466,17 @@ async def root():
 
 
 def _verify_line_signature(body: str, signature: str, secret: str) -> bool:
-    """LINE 웹훅 서명 검증 (HMAC-SHA256 + base64)."""
+    """LINE 웹훅 서명 검증 (HMAC-SHA256 + base64). 헤더에 여러 서명(쉼표 구분)이 올 수 있음."""
+    secret = (secret or "").strip()
     if not signature or not secret:
         return False
     gen = base64.b64encode(
         hmac.new(secret.encode("utf-8"), body.encode("utf-8"), hashlib.sha256).digest()
     ).decode("utf-8")
-    return hmac.compare_digest(gen, signature)
+    for s in signature.split(","):
+        if hmac.compare_digest(gen, s.strip()):
+            return True
+    return hmac.compare_digest(gen, signature.strip())
 
 
 def _run_handler_sync(body_str: str, signature: str) -> None:
