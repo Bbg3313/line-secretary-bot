@@ -58,7 +58,7 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   );
 }
 
-const STATUS_OPTIONS = ["대기", "완료"] as const;
+const STATUS_OPTIONS = ["대기", "진행중", "완료"] as const;
 const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 
 type TaskTableProps = {
@@ -91,7 +91,6 @@ export default function TaskTable({
   const router = useRouter();
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
   const [localAssignee, setLocalAssignee] = useState<Record<string, string>>({});
-  const [dispatched, setDispatched] = useState<Record<string, boolean>>({});
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -301,7 +300,7 @@ export default function TaskTable({
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-slate-600/60 bg-slate-800/30 scrollbar-thin">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-base">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
               <th className="min-w-[100px] px-4 py-4 font-medium text-slate-400">병원명</th>
@@ -343,31 +342,47 @@ export default function TaskTable({
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(getStatus(row))
-                      ? "opacity-50 bg-slate-800/40 [&_td]:line-through"
-                      : dispatched[row.id]
-                        ? "bg-slate-800/60"
-                        : ""
+                    isDone(getStatus(row)) ? "opacity-50 bg-slate-800/40 [&_td]:line-through" : ""
                   }`}
                 >
-                  <td className="px-4 py-4 font-medium text-slate-200">
+                  <td className="px-4 py-5 font-medium text-slate-200 text-base">
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className="px-4 py-4 text-slate-300">
+                  <td className="px-4 py-5 text-slate-300 text-base">
                     {row.task_type?.trim() || "개인"}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-5">
                     <select
                       value={getAssignee(row)}
                       onChange={async (e) => {
                         const next = e.target.value;
-                        const nextStatus = next === "미정" ? "대기" : "완료";
+                        const prevAssignee = getAssignee(row);
+                        const prevStatusLabel = statusLabel(getStatus(row));
+                        let nextStatus: string | null = null;
+
+                        // 스마트 상태 연동:
+                        // - 이전 담당자가 미정이었고
+                        // - 새 담당자가 미정이 아니며
+                        // - 현재 상태가 대기인 경우에만 -> 진행중으로 변경
+                        if (
+                          prevAssignee === "미정" &&
+                          next !== "미정" &&
+                          prevStatusLabel === "대기"
+                        ) {
+                          nextStatus = "진행중";
+                        }
+
                         setLocalAssignee((prev) => ({ ...prev, [row.id]: next }));
-                        setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus }));
-                        const { error } = await supabase
-                          .from("tasks")
-                          .update({ assignee: next, status: nextStatus })
-                          .eq("id", row.id);
+                        if (nextStatus) {
+                          setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus! }));
+                        }
+
+                        const payload: Record<string, string> = { assignee: next };
+                        if (nextStatus) {
+                          payload.status = nextStatus;
+                        }
+
+                        const { error } = await supabase.from("tasks").update(payload).eq("id", row.id);
                         if (error) {
                           console.error(error);
                           // 아직 Supabase tasks 테이블에 assignee/status 컬럼이 없으면 경고만 찍고 UI는 유지
@@ -386,16 +401,18 @@ export default function TaskTable({
                             delete u[row.id];
                             return u;
                           });
-                          setLocalStatus((prev) => {
-                            const u = { ...prev };
-                            delete u[row.id];
-                            return u;
-                          });
+                          if (nextStatus) {
+                            setLocalStatus((prev) => {
+                              const u = { ...prev };
+                              delete u[row.id];
+                              return u;
+                            });
+                          }
                           return;
                         }
                         router.refresh();
                       }}
-                      className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      className="min-w-[150px] rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     >
                       {ASSIGNEE_OPTIONS.map((a) => (
                         <option key={a} value={a} className="bg-slate-800 text-slate-100">
@@ -404,17 +421,17 @@ export default function TaskTable({
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-5">
                     <DeadlineCell deadline={row.deadline} />
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-5">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(getStatus(row))}`}
+                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
                     >
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[220px] px-4 py-4 text-slate-200">
+                  <td className="max-w-[260px] px-4 py-5 text-slate-200 text-base">
                     <button
                       type="button"
                       className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "opacity-80" : "font-medium"}`}
@@ -424,48 +441,12 @@ export default function TaskTable({
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-4">
-                    <div className="flex flex-row flex-nowrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (dispatched[row.id]) return;
-                          const assignee = getAssignee(row);
-                          if (assignee === "미정") {
-                            alert("담당자를 먼저 선택해 주세요.");
-                            return;
-                          }
-                          // 지시 시에는 요약이 아닌 전체 내용을 사용하도록, 전체 텍스트를 구성
-                          const fullTitle = (row.title || "").trim() || "제목 없음";
-                          const fullDescription =
-                            (row.description || "").trim() || fullTitle;
-                          // TODO: LINE 메시지 발송 API 연동 시 아래 payload를 그대로 사용
-                          console.log("DISPATCH_TASK_PAYLOAD", {
-                            id: row.id,
-                            assignee,
-                            title: fullTitle,
-                            description: fullDescription,
-                          });
-                          const confirmed = confirm(
-                            `담당자 [${assignee}]에게 업무를 지시하시겠습니까?`,
-                          );
-                          if (!confirmed) return;
-                          setDispatched((prev) => ({ ...prev, [row.id]: true }));
-                        }}
-                        disabled={dispatched[row.id]}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                          dispatched[row.id]
-                            ? "bg-slate-700/80 text-slate-400 cursor-default"
-                            : "bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/40"
-                        }`}
-                      >
-                        <span aria-hidden>🚀</span>
-                        {dispatched[row.id] ? "지시 완료" : "지시하기"}
-                      </button>
+                  <td className="px-4 py-5">
+                    <div className="flex flex-row flex-nowrap items-center gap-3">
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}
-                        className="rounded p-1.5 text-slate-400 transition-colors duration-150 hover:bg-slate-600/60 hover:text-emerald-300"
+                        className="rounded p-2 text-slate-300 transition-colors duration-150 hover:bg-slate-600/60 hover:text-emerald-300"
                         title="수정"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -474,7 +455,7 @@ export default function TaskTable({
                         type="button"
                         onClick={() => handleDelete(row.id)}
                         disabled={deletingId === row.id}
-                        className="rounded p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-500/25 hover:text-red-400 disabled:opacity-50"
+                        className="rounded p-2 text-slate-300 transition-colors duration-150 hover:bg-red-500/25 hover:text-red-400 disabled:opacity-50"
                         title="삭제"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
