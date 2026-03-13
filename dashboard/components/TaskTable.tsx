@@ -99,6 +99,25 @@ export default function TaskTable({
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
+  async function cycleStatus(id: string, current: string) {
+    const order = ["대기", "진행중", "완료", "긴급"];
+    const idx = order.indexOf(current);
+    const next = order[(idx + 1 + order.length) % order.length];
+    setLocalStatus((prev) => ({ ...prev, [id]: next }));
+    const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
+    if (error) {
+      console.error(error);
+      alert("상태 변경 실패: " + error.message);
+      setLocalStatus((prev) => {
+        const u = { ...prev };
+        delete u[id];
+        return u;
+      });
+      return;
+    }
+    router.refresh();
+  }
+
   async function toggleDone(id: string, current: string) {
     const next = isDone(current) ? "대기" : "완료";
     setTogglingId(id);
@@ -242,7 +261,7 @@ export default function TaskTable({
         </select>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-600/60 bg-slate-800/30">
+      <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-slate-600/60 bg-slate-800/30 scrollbar-thin">
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
@@ -327,11 +346,14 @@ export default function TaskTable({
                     <DeadlineCell deadline={row.deadline} />
                   </td>
                   <td className="px-4 py-4">
-                    <span
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(getStatus(row))}`}
+                    <button
+                      type="button"
+                      onClick={() => cycleStatus(row.id, statusLabel(getStatus(row)))}
+                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(getStatus(row))} transition-colors`}
+                      title="상태 변경"
                     >
                       {statusLabel(getStatus(row))}
-                    </span>
+                    </button>
                   </td>
                   <td className="max-w-[220px] px-4 py-4 text-slate-200">
                     <button
