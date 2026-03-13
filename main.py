@@ -237,6 +237,32 @@ TASK_TYPES_ALLOWED = frozenset({
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
 
+_URGENT_KEYWORDS = (
+    "긴급", "급하게", "급한", "asap", "ASAP",
+    "지금 바로", "바로 처리", "최대한 빨리", "오늘 안에", "오늘안에",
+)
+_IN_PROGRESS_KEYWORDS = (
+    "진행중", "진행 중", "작업중", "작업 중", "하고있", "하고 있",
+)
+
+
+def _infer_status(title: str, desc: str, deadline_ymd: str | None, today: date) -> str:
+    """내용·마감 기준으로 초기 status 추론."""
+    text = f"{title} {desc}".lower()
+    if any(k.lower() in text for k in _URGENT_KEYWORDS):
+        return "긴급"
+    if any(k.lower() in text for k in _IN_PROGRESS_KEYWORDS):
+        return "진행중"
+    if deadline_ymd:
+        try:
+            d = datetime.strptime(deadline_ymd, "%Y-%m-%d").date()
+            if d <= today:
+                return "긴급"
+        except Exception:
+            pass
+    return "대기"
+
+
 def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
     """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. 병원명 정규화·빈 행 제거."""
     today = date.today()
@@ -379,6 +405,7 @@ def insert_one_task_row(
     title_str = (title or desc[:50] or "업무").strip()
     if re.search(r"일정\s*·?\s*업무\s*요약|업무\s*요약", title_str):
         title_str = (desc[:20] if len(desc) > 20 else desc).strip() or "업무"
+    status_val = _infer_status(title_str, desc, None, date.today())
     row = {
         "chat_id": chat_id,
         "line_user_id": line_user_id,
@@ -388,7 +415,7 @@ def insert_one_task_row(
         "description": desc,
         "hospital_name": None,
         "task_type": None,
-        "status": "대기",
+        "status": status_val,
         "deadline": None,
     }
     resp = requests.post(url, headers=_tasks_headers(), json=row, timeout=15)
@@ -430,8 +457,11 @@ def save_tasks_to_supabase(
         if task_type not in TASK_TYPES_ALLOWED:
             task_type = "개인"
         deadline = t.get("deadline") or None
+        deadline_ymd: str | None = None
         if deadline and isinstance(deadline, str) and len(deadline.strip()) == 10:
-            deadline = f"{deadline.strip()}T23:59:59Z"
+            deadline_ymd = deadline.strip()
+            deadline = f"{deadline_ymd}T23:59:59Z"
+        status_val = _infer_status(title_str, desc, deadline_ymd, date.today())
         row = {
             "chat_id": chat_id,
             "line_user_id": line_user_id,
@@ -441,7 +471,7 @@ def save_tasks_to_supabase(
             "description": desc,
             "hospital_name": hospital,
             "task_type": task_type,
-            "status": "대기",
+            "status": status_val,
             "deadline": deadline,
         }
         insert_one(row)
