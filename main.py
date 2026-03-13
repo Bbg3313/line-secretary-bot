@@ -9,7 +9,7 @@ import hmac
 import json
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
@@ -74,26 +74,58 @@ GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에
 메시지: {message}
 """
 
-# 원자화: 메시지에 포함된 업무를 개별 단위로 분리해 JSON 추출
-GEMINI_EXTRACT_PROMPT = """당신은 JSON만 출력하는 API입니다. 설명, 마크다운, 코드블록(```) 없이 반드시 아래 형식의 JSON 한 덩어리만 출력하세요.
+# 원자화: 메시지에 포함된 업무를 개별 단위로 분리해 JSON 추출 (병원명·유형·마감·핵심 제목)
+GEMINI_EXTRACT_PROMPT = """당신은 JSON만 출력하는 API입니다. 설명·마크다운·코드블록 없이 아래 형식의 JSON 한 덩어리만 출력하세요.
+
+오늘 날짜: {today_ymd} (이걸 기준으로 "내일"이면 다음 날짜를 YYYY-MM-DD로 계산해 넣으세요)
 
 규칙:
-1. 응답 전체는 반드시 하나의 유효한 JSON 객체만 포함한다.
-2. 키 이름은 정확히 "summary"와 "tasks" 두 개만 사용한다. 따옴표나 키 이름을 바꾸지 마세요.
-3. summary: 문자열. 전체를 한 줄 요약 (예: "의원 업무 3건").
-4. tasks: 배열. 업무가 있으면 객체 배열, 없으면 [].
-   각 항목 객체는 반드시 다음 키를 가진다: hospital_name, task_type, deadline, description.
-   - hospital_name: 병원/의원명. 있으면 문자열, 없으면 null
-   - task_type: "마케팅" 또는 "미팅" 또는 "개인" 중 하나, 없으면 null
-   - deadline: YYYY-MM-DD (예: 2025-03-15), 없으면 null
-   - description: 해당 업무 내용 한 줄 요약 (필수, 문자열)
+1. 응답은 반드시 하나의 JSON 객체만. 키는 "summary"와 "tasks"만 사용.
+2. summary: 전체 한 줄 요약 (예: "의원 업무 3건"). "일정·업무 요약" 같은 기계적 문구 금지.
+3. tasks: 업무가 여러 개면 각각 개별 객체로 쪼개서 배열에 넣기. 각 객체 필수 키:
+   - title: 해당 업무의 핵심만 (예: "마이셀 예산 증액", "Clyve SNS 게시"). 10자 내외. 기계적 문구 금지.
+   - hospital_name: 병원/의원/고객명. 메시지에 Jy, our, Thebb, Delp, Clyve 등 나오면 그대로, 없으면 null
+   - task_type: "마케팅"|"행정"|"CS"|"미팅"|"개인" 중 하나, 없으면 null
+   - deadline: "내일"·"다음 주 화요일" 등이면 오늘({today_ymd}) 기준으로 실제 날짜 YYYY-MM-DD로 출력. 없으면 null
+   - description: 해당 업무 한 줄 요약 (필수)
 
-출력 예시 (이 형식만 따르고 다른 텍스트는 출력하지 마세요):
-{"summary":"의원 업무 2건","tasks":[{"hospital_name":"Jy","task_type":"마케팅","deadline":"2025-03-15","description":"SNS 게시"},{"hospital_name":null,"task_type":"개인","deadline":null,"description":"회의 준비"}]}
+출력 예시:
+{{"summary":"의원·미팅 2건","tasks":[{{"title":"Clyve SNS 게시","hospital_name":"Clyve","task_type":"마케팅","deadline":"{today_ymd}","description":"SNS 게시물 작성"},{{"title":"AIDA 미팅","hospital_name":null,"task_type":"미팅","deadline":null,"description":"개발팀 미팅 링크 공유"}}]}}
 
 메시지:
 {message}
 """
+
+
+def _resolve_relative_date(relative_str: str, base: date) -> str | None:
+    """'내일','모레','다음 주 월요일' 등을 base 기준 YYYY-MM-DD로 변환."""
+    if not relative_str or not isinstance(relative_str, str):
+        return None
+    s = relative_str.strip()
+    if not s:
+        return None
+    # 이미 YYYY-MM-DD 형태면 그대로
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+    day_names = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+    weekday_map = {name: (i + 1) % 7 for i, name in enumerate(day_names)}  # 월=1, ..., 일=0
+    s_lower = s.replace(" ", "")
+    if "내일" in s_lower or s_lower == "내일":
+        return (base + timedelta(days=1)).strftime("%Y-%m-%d")
+    if "모레" in s_lower or s_lower == "모레":
+        return (base + timedelta(days=2)).strftime("%Y-%m-%d")
+    if "오늘" in s_lower or s_lower == "오늘":
+        return base.strftime("%Y-%m-%d")
+    for name in day_names:
+        if name in s and ("다음주" in s_lower or "다음 주" in s):
+            w = weekday_map.get(name)
+            if w is not None:
+                base_w = (base.weekday() + 1) % 7  # 월=1, ..., 일=0
+                days_ahead = (w - base_w + 7) % 7
+                if days_ahead == 0:
+                    days_ahead = 7
+                return (base + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    return None
 
 
 def _call_gemini(prompt: str) -> str:
@@ -119,31 +151,31 @@ def analyze_with_gemini(text: str) -> str:
 
 
 def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
-    """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. 파싱 실패 시 기본값 반환."""
-    default_summary = "일정·업무 요약"
+    """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. title·병원명·유형·마감 원자화."""
+    today = date.today()
+    today_ymd = today.strftime("%Y-%m-%d")
+    default_summary = text[:50].strip() if text else "업무"
     default_tasks: list[dict] = []
     try:
-        raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(message=text))
+        raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(today_ymd=today_ymd, message=text))
     except Exception as e:
         print(f"[analyze_and_extract] Gemini 호출 실패: {e}", flush=True)
         return default_summary, default_tasks
     raw = (raw or "").strip()
     try:
-        # 마크다운 코드블록 제거
         if raw.startswith("```"):
             raw = re.sub(r"^```(?:json)?\s*", "", raw)
             raw = re.sub(r"\s*```\s*$", "", raw)
         json_match = re.search(r"\{[\s\S]*\}", raw)
         if not json_match:
-            summary = raw[:200] if raw else default_summary
-            return summary, default_tasks
+            return (raw[:200] if raw else default_summary), default_tasks
         data = json.loads(json_match.group())
         if not isinstance(data, dict):
             return (raw[:200] if raw else default_summary), default_tasks
         summary = default_summary
         if "summary" in data:
             s = data.get("summary")
-            if s is not None and isinstance(s, str) and s.strip():
+            if s is not None and isinstance(s, str) and s.strip() and "일정·업무 요약" not in s:
                 summary = s.strip()
         raw_tasks = data.get("tasks") if isinstance(data.get("tasks"), list) else []
         tasks = []
@@ -151,17 +183,28 @@ def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
             if not isinstance(t, dict):
                 continue
             desc = (t.get("description") or t.get("title") or "").strip()
+            title = (t.get("title") or "").strip()
+            if not desc and title:
+                desc = title
             if not desc:
                 continue
+            if not title:
+                title = desc[:30] if len(desc) > 30 else desc
             def _str_or_none(v) -> str | None:
                 if v is None: return None
                 if isinstance(v, str): return v.strip() or None
                 return str(v).strip() or None
+            deadline = _str_or_none(t.get("deadline"))
+            if deadline and not re.match(r"^\d{4}-\d{2}-\d{2}$", deadline or ""):
+                resolved = _resolve_relative_date(deadline, today)
+                if resolved:
+                    deadline = resolved
             tasks.append({
+                "title": title[:200],
                 "description": desc,
                 "hospital_name": _str_or_none(t.get("hospital_name")),
                 "task_type": _str_or_none(t.get("task_type")),
-                "deadline": _str_or_none(t.get("deadline")),
+                "deadline": deadline,
             })
         if not summary or summary.startswith("(Gemini"):
             summary = raw[:200] if raw else default_summary
@@ -233,15 +276,20 @@ def insert_one_task_row(
     line_group_id: str | None,
     source_message: str,
     description: str,
+    title: str | None = None,
 ) -> None:
     """tasks 테이블에 정확히 1건만 삽입 (메시지당 최소 1건 보장용). 실패 시 예외."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
     desc = (description or source_message or "업무 내용")[:500].strip() or "업무 내용"
+    title_str = (title or desc[:50] or "업무").strip()
+    if title_str == "일정·업무 요약":
+        title_str = desc[:30] if len(desc) > 30 else desc
     row = {
         "chat_id": chat_id,
         "line_user_id": line_user_id,
         "line_group_id": line_group_id,
         "source_message": source_message,
+        "title": title_str,
         "description": desc,
         "hospital_name": None,
         "task_type": None,
@@ -277,6 +325,9 @@ def save_tasks_to_supabase(
         desc = (t.get("description") or t.get("title") or "").strip()
         if not desc:
             continue
+        title_str = (t.get("title") or desc[:50] or "").strip() or desc[:30]
+        if title_str == "일정·업무 요약":
+            title_str = desc[:30]
         deadline = t.get("deadline") or None
         if deadline and isinstance(deadline, str) and len(deadline.strip()) == 10:
             deadline = f"{deadline.strip()}T23:59:59Z"
@@ -285,6 +336,7 @@ def save_tasks_to_supabase(
             "line_user_id": line_user_id,
             "line_group_id": line_group_id,
             "source_message": source_message,
+            "title": title_str,
             "description": desc,
             "hospital_name": t.get("hospital_name") or None,
             "task_type": t.get("task_type") or None,
@@ -481,12 +533,11 @@ def handle_message(event: MessageEvent):
 
     # 일반 메시지: Gemini 원자화 분석 → chats + tasks 저장 → 답장
     summary, tasks = analyze_and_extract(text)
-    # 실제로 넣을 수 있는 게 하나도 없으면(비어 있거나 description 다 비어 있음) 최소 1건 fallback
     has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False
     if not has_valid:
         fallback_desc = (summary[:500] if summary and not summary.startswith("(Gemini") else text[:500].strip()) or "업무 내용"
-        tasks = [{"description": fallback_desc, "hospital_name": None, "task_type": None, "deadline": None}]
-        print(f"[저장] tasks 유효한 항목 없어서 1건 fallback 저장")
+        fallback_title = (summary[:30] if summary and "일정·업무" not in summary else text[:30].strip()) or "업무"
+        tasks = [{"title": fallback_title, "description": fallback_desc, "hospital_name": None, "task_type": None, "deadline": None}]
     try:
         chat_id = save_to_supabase(
             line_user_id=user_id,
@@ -494,23 +545,24 @@ def handle_message(event: MessageEvent):
             raw_message=text,
             gemini_analysis=summary,
         )
-        # 메시지당 tasks에 무조건 1건 먼저 넣기 (chats만 차고 tasks 비는 현상 방지)
-        insert_one_task_row(
-            chat_id=chat_id,
-            line_user_id=user_id,
-            line_group_id=group_id,
-            source_message=text,
-            description=text[:500].strip() or summary[:200] if summary else "업무",
-        )
-        # Gemini에서 뽑은 추가 업무가 있으면 더 넣기
-        save_tasks_to_supabase(
-            chat_id=chat_id,
-            line_user_id=user_id,
-            line_group_id=group_id,
-            source_message=text,
-            tasks=tasks,
-        )
-        print(f"[저장] user={user_id}, group={group_id}, chats+tasks 1건 필수, 추가 {len(tasks)}건")
+        if not has_valid:
+            insert_one_task_row(
+                chat_id=chat_id,
+                line_user_id=user_id,
+                line_group_id=group_id,
+                source_message=text,
+                description=tasks[0]["description"],
+                title=tasks[0].get("title"),
+            )
+        else:
+            save_tasks_to_supabase(
+                chat_id=chat_id,
+                line_user_id=user_id,
+                line_group_id=group_id,
+                source_message=text,
+                tasks=tasks,
+            )
+        print(f"[저장] user={user_id}, group={group_id}, summary={summary[:40]}..., tasks={len(tasks)}건")
         reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
         import traceback
@@ -521,7 +573,7 @@ def handle_message(event: MessageEvent):
 
 @app.post("/debug/insert")
 async def debug_insert():
-    """Supabase 연결 확인용: 테스트 데이터 1건 삽입 (chats + tasks 1건 필수)."""
+    """Supabase 연결 확인용: 테스트 데이터 삽입 (chats + tasks)."""
     text = "Clyve 의원 리포트 마감 내일, 삼성 병원 미팅 다음 주 수요일"
     summary, tasks = analyze_and_extract(text)
     chat_id = save_to_supabase(
@@ -530,9 +582,13 @@ async def debug_insert():
         raw_message=text,
         gemini_analysis=summary,
     )
-    insert_one_task_row(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, description=text)
-    save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, tasks=tasks)
-    return {"status": "ok", "summary": summary, "tasks_count": 1 + len(tasks)}
+    has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False
+    if not has_valid:
+        tasks = [{"title": summary[:30], "description": text[:200], "hospital_name": None, "task_type": None, "deadline": None}]
+        insert_one_task_row(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, description=tasks[0]["description"], title=tasks[0].get("title"))
+    else:
+        save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, tasks=tasks)
+    return {"status": "ok", "summary": summary, "tasks_count": len(tasks)}
 
 
 @app.get("/debug/gemini-models")

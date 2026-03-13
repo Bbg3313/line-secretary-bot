@@ -13,7 +13,7 @@ export default function AIBriefing({ totalTasks, dueTodayCount, dueTodayExample 
         : `대표님, 총 ${totalTasks}개의 업무가 있습니다.`;
 
   return (
-    <section className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-teal-950/30 p-5 shadow-lg backdrop-blur-sm">
+    <section className="rounded-xl border border-slate-600/80 bg-slate-800/30 p-5 shadow-lg">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-xl">
           ✨

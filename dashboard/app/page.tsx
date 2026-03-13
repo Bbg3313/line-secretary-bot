@@ -1,5 +1,5 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
-import { hasSupabaseConfig, supabase, supabaseUrlPrefix } from "@/lib/supabase";
+import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { getScheduleChats } from "@/lib/classify";
 import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST } from "@/lib/scheduleUtils";
 import SummaryCards from "@/components/SummaryCards";
@@ -45,14 +45,17 @@ export default async function DashboardPage() {
   const todayKey = getTodayDateKeyKST();
 
   const totalTasks = tasks.length;
-  const dueTodayCount = tasks.filter((t) => isDeadlineTodayKST(t.deadline)).length;
+  const dueTodayCount = tasks.filter((t) => t.status !== "완료" && isDeadlineTodayKST(t.deadline)).length;
   const dueTodayExample =
     tasks.find((t) => isDeadlineTodayKST(t.deadline))?.hospital_name ||
-    tasks.find((t) => isDeadlineTodayKST(t.deadline))?.description ||
     tasks.find((t) => isDeadlineTodayKST(t.deadline))?.title ||
+    tasks.find((t) => isDeadlineTodayKST(t.deadline))?.description ||
     null;
   const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
-  const todayTaskCount = tasks.filter((t) => getDateKeyKST(t.created_at) === todayKey).length;
+  const isDone = (s: string) => s === "완료" || s === "done";
+  const todayTaskCount = tasks.filter(
+    (t) => !isDone(t.status) && (isDeadlineTodayKST(t.deadline) || getDateKeyKST(t.created_at) === todayKey)
+  ).length;
 
   return (
     <main className="space-y-10">
@@ -93,17 +96,6 @@ export default async function DashboardPage() {
         <TaskTable tasks={tasks} />
       </section>
 
-      {hasSupabaseConfig && (
-        <section className="rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-xs text-slate-400">
-          <p>디버그: chats {chats.length}건, tasks {tasks.length}건 로드됨</p>
-          <p>연결 URL: {supabaseUrlPrefix}</p>
-          {chats.length > 0 && tasks.length === 0 && (
-            <p className="mt-1 text-amber-400">
-              → tasks가 0건입니다. Render 백엔드와 같은 Supabase 프로젝트인지 확인하세요 (같은 URL). Supabase Table Editor에서 tasks 테이블에 행이 있는지도 확인하세요.
-            </p>
-          )}
-        </section>
-      )}
     </main>
   );
 }
