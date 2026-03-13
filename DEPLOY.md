@@ -103,6 +103,13 @@
    - **Verify** 버튼 눌러서 **성공** 나오는지 확인합니다.  
    - **Render 로그**에서 메시지 보낼 때 `[요청] POST /callback` 이 안 보이면 → LINE이 우리 서버로 요청을 안 보내는 것. 위 URL과 Use 설정을 다시 확인합니다.
 
+4. **브라우저는 OK인데 답장·Supabase에 안 들어갈 때**  
+   - `https://본인서비스.onrender.com/debug/env` 접속 → 모든 값이 `ok`인지 확인. 하나라도 비어있으면 Render **Environment**에서 해당 키 추가.  
+   - LINE에서 메시지 보낸 **직후** Render **Logs** 확인:  
+     - `[요청] POST /callback` 없음 → LINE이 이 서버로 안 보냄. 웹훅 URL·Use 다시 확인.  
+     - `[요청] POST /callback` 있음 + `[웹훅] 서명 오류` → CHANNEL_SECRET을 LINE 채널의 Channel secret과 동일하게 다시 입력.  
+     - `[웹훅] 서명 검증 통과` 다음에 `처리 오류` → 로그에 찍힌 에러 메시지로 원인 확인 (Gemini, Supabase 등).
+
 ## 5. 서버 실행 명령어 정리
 
 - **Render (배포)**  

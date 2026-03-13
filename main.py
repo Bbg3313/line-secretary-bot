@@ -3,14 +3,12 @@ LINE 일정 관리 비서 봇
 메시지 수신 → Gemini로 분석(원자화) → Supabase chats + tasks 테이블 저장
 조회 요청 시 Supabase에서 일정/업무 요약 답장
 """
-import asyncio
 import base64
 import hashlib
 import hmac
 import json
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -53,7 +51,6 @@ if SUPABASE_URL and not (SUPABASE_URL.startswith("http://") or SUPABASE_URL.star
 app = FastAPI(title="LINE Secretary Bot")
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-_executor = ThreadPoolExecutor(max_workers=2)
 
 
 @app.middleware("http")
@@ -465,6 +462,24 @@ async def root():
     return {"status": "ok", "message": "LINE Secretary Bot"}
 
 
+@app.get("/debug/env")
+async def debug_env():
+    """Render 환경 변수 설정 여부만 확인 (값 노출 안 함)."""
+    return {
+        "CHANNEL_SECRET": "ok" if (CHANNEL_SECRET and len(CHANNEL_SECRET) > 5) else "비어있거나 짧음",
+        "CHANNEL_ACCESS_TOKEN": "ok" if (CHANNEL_ACCESS_TOKEN and len(CHANNEL_ACCESS_TOKEN) > 10) else "비어있거나 짧음",
+        "GEMINI_API_KEY": "ok" if (GEMINI_API_KEY and len(GEMINI_API_KEY) > 5) else "비어있거나 짧음",
+        "SUPABASE_URL": "ok" if (SUPABASE_URL and SUPABASE_URL.startswith("http")) else "비어있거나 잘못됨",
+        "SUPABASE_KEY": "ok" if (SUPABASE_KEY and len(SUPABASE_KEY) > 10) else "비어있거나 짧음",
+    }
+
+
+@app.get("/callback")
+async def callback_get(request: Request):
+    """LINE Verify 등 GET 요청용. 웹훅은 POST만 처리."""
+    return {"status": "ok", "message": "Use POST for webhook"}
+
+
 def _verify_line_signature(body: str, signature: str, secret: str) -> bool:
     """LINE 웹훅 서명 검증 (HMAC-SHA256 + base64). 헤더에 여러 서명(쉼표 구분)이 올 수 있음."""
     secret = (secret or "").strip()
@@ -479,27 +494,23 @@ def _verify_line_signature(body: str, signature: str, secret: str) -> bool:
     return hmac.compare_digest(gen, signature.strip())
 
 
-def _run_handler_sync(body_str: str, signature: str) -> None:
-    """동기 핸들러 실행 (스레드에서 호출). 예외는 로그만."""
-    try:
-        handler.handle(body_str, signature)
-        print("[웹훅] 처리·답장 완료")
-    except Exception as e:
-        import traceback
-        print(f"[웹훅] 백그라운드 처리 오류: {e}")
-        traceback.print_exc()
-
-
 async def _handle_line_webhook(request: Request):
     signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
     body_str = body.decode("utf-8")
     print(f"[웹훅] 수신 body_len={len(body_str)}, signature={'있음' if signature else '없음'}")
     if not _verify_line_signature(body_str, signature, CHANNEL_SECRET or ""):
-        print("[웹훅] 서명 오류")
+        print("[웹훅] 서명 오류 (CHANNEL_SECRET 또는 LINE 서명 불일치)")
         raise HTTPException(status_code=400, detail="Invalid signature")
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor, _run_handler_sync, body_str, signature)
+    print("[웹훅] 서명 검증 통과, 처리 시작")
+    try:
+        handler.handle(body_str, signature)
+        print("[웹훅] 처리·답장 완료")
+    except Exception as e:
+        import traceback
+        print(f"[웹훅] 처리 오류: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     return {"status": "ok"}
 
 
@@ -509,7 +520,7 @@ async def webhook(request: Request):
 
 
 @app.post("/callback")
-async def callback(request: Request):
+async def callback_post(request: Request):
     return await _handle_line_webhook(request)
 
 
