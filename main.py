@@ -3,9 +3,14 @@ LINE 일정 관리 비서 봇
 메시지 수신 → Gemini로 분석(원자화) → Supabase chats + tasks 테이블 저장
 조회 요청 시 Supabase에서 일정/업무 요약 답장
 """
+import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -48,6 +53,7 @@ if SUPABASE_URL and not (SUPABASE_URL.startswith("http://") or SUPABASE_URL.star
 app = FastAPI(title="LINE Secretary Bot")
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
+_executor = ThreadPoolExecutor(max_workers=2)
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -449,14 +455,37 @@ async def root():
     return {"status": "ok", "message": "LINE Secretary Bot"}
 
 
+def _verify_line_signature(body: str, signature: str, secret: str) -> bool:
+    """LINE 웹훅 서명 검증 (HMAC-SHA256 + base64)."""
+    if not signature or not secret:
+        return False
+    gen = base64.b64encode(
+        hmac.new(secret.encode("utf-8"), body.encode("utf-8"), hashlib.sha256).digest()
+    ).decode("utf-8")
+    return hmac.compare_digest(gen, signature)
+
+
+def _run_handler_sync(body_str: str, signature: str) -> None:
+    """동기 핸들러 실행 (스레드에서 호출). 예외는 로그만."""
+    try:
+        handler.handle(body_str, signature)
+        print("[웹훅] 처리·답장 완료")
+    except Exception as e:
+        import traceback
+        print(f"[웹훅] 백그라운드 처리 오류: {e}")
+        traceback.print_exc()
+
+
 async def _handle_line_webhook(request: Request):
     signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
     body_str = body.decode("utf-8")
-    try:
-        handler.handle(body_str, signature)
-    except InvalidSignatureError:
+    print(f"[웹훅] 수신 body_len={len(body_str)}, signature={'있음' if signature else '없음'}")
+    if not _verify_line_signature(body_str, signature, CHANNEL_SECRET or ""):
+        print("[웹훅] 서명 오류")
         raise HTTPException(status_code=400, detail="Invalid signature")
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(_executor, _run_handler_sync, body_str, signature)
     return {"status": "ok"}
 
 

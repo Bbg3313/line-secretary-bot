@@ -82,6 +82,22 @@
 - 무료 플랜은 **15분 비활성 시 슬립**됩니다. 그 후 첫 요청은 약 50초 지연될 수 있습니다.
 - 웹훅은 **/callback** 또는 **/webhook** 둘 다 사용 가능합니다.
 
+### LINE에 응답이 안 올 때
+
+1. **슬립 상태 (가장 흔함)**  
+   브라우저에서 `https://본인서비스이름.onrender.com/` 한 번 열어서 서버를 깨운 뒤, **1분 안에** LINE에서 봇에게 메시지를 보내 보세요.
+
+2. **Render 로그 확인**  
+   Render 대시보드 → 해당 서비스 → **Logs**.  
+   - 메시지 보낼 때 `[웹훅] 수신 body_len=...` 가 안 보이면 → LINE이 우리 서버로 요청을 안 보내는 것. **Webhook URL**이 정확한지, **Use webhook**이 켜져 있는지 LINE Developers에서 확인.  
+   - `[웹훅] 서명 오류` → **CHANNEL_SECRET**이 LINE 채널 기본 설정의 Channel secret과 일치하는지 확인.  
+   - `[웹훅] 처리 중 오류` → 나오는 에러 메시지대로 환경 변수(GEMINI, SUPABASE 등) 또는 네트워크 문제 확인.
+
+3. **LINE Developers 확인**  
+   - **Messaging API** 탭에서 **Webhook URL**이 `https://...onrender.com/callback` (끝에 `/callback`) 인지.  
+   - **Webhook** 설정이 **Use** 로 켜져 있는지.  
+   - **Verify** 버튼으로 성공 나오는지.
+
 ## 5. 서버 실행 명령어 정리
 
 - **Render (배포)**  
