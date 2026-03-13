@@ -103,6 +103,7 @@
 | ⑥ | LINE 앱에서 봇에게 메시지 보내서 응답 오는지 확인 | |
 
 - 무료 플랜은 **15분 비활성 시 슬립**됩니다. 그 후 첫 요청은 약 50초 지연될 수 있습니다.
+- **슬립 방지 (선택)**: [UptimeRobot](https://uptimerobot.com) 또는 [cron-job.org](https://cron-job.org)에서 **`서비스URL/ping`** (예: `https://line-secretary-bot-xxxx.onrender.com/ping`)을 **10~14분 간격**으로 GET 요청하도록 설정해 두면, 슬립되지 않아 LINE 메시지가 와도 바로 응답합니다. 15분마다 직접 깨울 필요 없음.
 - 웹훅은 **/callback** 또는 **/webhook** 둘 다 사용 가능합니다.
 
 ### LINE에 응답이 안 올 때

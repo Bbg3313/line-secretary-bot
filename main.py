@@ -624,6 +624,7 @@ def handle_message(event: MessageEvent):
         return
 
     # 일반 메시지: Gemini 원자화 분석 → chats + tasks 저장 → 답장
+    print(f"[웹훅] 일반 메시지 처리 시작 text_len={len(text)}", flush=True)
     summary, tasks = analyze_and_extract(text)
     has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False
     if not has_valid:
@@ -644,6 +645,7 @@ def handle_message(event: MessageEvent):
             raw_message=text,
             gemini_analysis=summary,
         )
+        print(f"[저장] chats OK chat_id={chat_id}", flush=True)
         save_tasks_to_supabase(
             chat_id=chat_id,
             line_user_id=user_id,
@@ -651,7 +653,7 @@ def handle_message(event: MessageEvent):
             source_message=text,
             tasks=tasks,
         )
-        print(f"[저장] user={user_id}, group={group_id}, summary={summary[:40]}..., tasks={len(tasks)}건")
+        print(f"[저장] tasks OK {len(tasks)}건, 답장 전송", flush=True)
         reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
         import traceback
@@ -688,6 +690,12 @@ async def debug_gemini_models():
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "LINE Secretary Bot"}
+
+
+@app.get("/ping")
+async def ping():
+    """슬립 방지용. UptimeRobot·cron-job.org 등에서 10~14분 간격으로 호출."""
+    return {"ok": True}
 
 
 @app.get("/debug/env")
