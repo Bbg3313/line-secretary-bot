@@ -47,5 +47,6 @@ LINE 메시지를 받아 Gemini로 업무를 추출(병원명·업무유형·마
 - **봇**: `pip install -r requirements.txt` 후 `.env` 설정, `python -m uvicorn main:app --port 8000`
 - **대시보드**: `dashboard/` 폴더에서 `npm install`, `.env.local` 설정, `npm run dev`
 
+- **요구사항 정리**: `PRD.md` — 서비스 개요, AI 분석·병원 매핑·날짜 처리·대시보드, 데이터 무결성 규칙.
 - **배포·웹훅·슬립 방지**: `DEPLOY.md` — Render 배포, LINE Webhook URL, UptimeRobot/cron으로 `서비스URL/ping` 호출 시 슬립 방지.
 - 대시보드 상세: `dashboard/README.md`

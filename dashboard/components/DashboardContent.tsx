@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { isDeadlineTodayKST } from "@/lib/scheduleUtils";
+import {
+  isDeadlineTodayKST,
+  getDateKeyKST,
+  getTodayDateKeyKST,
+} from "@/lib/scheduleUtils";
 import SummaryCards from "@/components/SummaryCards";
+import type { FilterMode } from "@/components/SummaryCards";
 import AIBriefing from "@/components/AIBriefing";
 import TaskTable from "@/components/TaskTable";
 
@@ -20,6 +25,10 @@ type DashboardContentProps = {
   supabaseError?: string;
 };
 
+function isDone(s: string | undefined) {
+  return s === "완료" || s === "done";
+}
+
 export default function DashboardContent({
   tasks,
   todayTaskCount,
@@ -28,12 +37,30 @@ export default function DashboardContent({
   briefingText,
 }: DashboardContentProps) {
   const router = useRouter();
-  const [filterTodayOnly, setFilterTodayOnly] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const tasksToShow = filterTodayOnly
-    ? tasks.filter((t) => t?.status !== "완료" && t?.status !== "done" && isDeadlineTodayKST(t?.deadline ?? null))
-    : tasks;
+  const todayKey = useMemo(() => getTodayDateKeyKST(), []);
+
+  const tasksToShow = useMemo(() => {
+    if (!filterMode) return tasks;
+    if (filterMode === "today_task") {
+      return tasks.filter(
+        (t) =>
+          !isDone(t?.status) &&
+          (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
+      );
+    }
+    if (filterMode === "urgent") {
+      return tasks.filter(
+        (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
+      );
+    }
+    if (filterMode === "today_schedule") {
+      return tasks.filter((t) => getDateKeyKST(t?.created_at ?? "") === todayKey);
+    }
+    return tasks;
+  }, [tasks, filterMode, todayKey]);
 
   async function handleDeleteAll() {
     if (!confirm("개발용: tasks 테이블 전체 삭제합니다. 계속할까요?")) return;
@@ -61,9 +88,9 @@ export default function DashboardContent({
           todayTaskCount={todayTaskCount}
           urgentCount={dueTodayCount}
           todayScheduleCount={todayScheduleCount}
-          onTodayClick={() => setFilterTodayOnly(true)}
-          filterTodayActive={filterTodayOnly}
-          onClearTodayFilter={() => setFilterTodayOnly(false)}
+          filterMode={filterMode}
+          onFilter={(mode) => setFilterMode(mode)}
+          onClearFilter={() => setFilterMode(null)}
         />
       </section>
 
@@ -74,8 +101,8 @@ export default function DashboardContent({
       <section>
         <TaskTable
           tasks={tasksToShow}
-          filterTodayActive={filterTodayOnly}
-          onClearTodayFilter={() => setFilterTodayOnly(false)}
+          filterMode={filterMode}
+          onClearFilter={() => setFilterMode(null)}
         />
       </section>
 

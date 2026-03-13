@@ -1,69 +1,49 @@
+export type FilterMode = "today_task" | "urgent" | "today_schedule" | null;
+
 export type SummaryCardsProps = {
   todayTaskCount: number;
   urgentCount: number;
   todayScheduleCount: number;
-  onTodayClick?: () => void;
-  filterTodayActive?: boolean;
-  onClearTodayFilter?: () => void;
+  filterMode?: FilterMode;
+  onFilter?: (mode: "today_task" | "urgent" | "today_schedule") => void;
+  onClearFilter?: () => void;
 };
 
 export default function SummaryCards({
   todayTaskCount,
   urgentCount,
   todayScheduleCount,
-  onTodayClick,
-  filterTodayActive,
-  onClearTodayFilter,
+  filterMode = null,
+  onFilter,
+  onClearFilter,
 }: SummaryCardsProps) {
-  const cards = [
-    {
-      label: "오늘의 할 일",
-      value: todayTaskCount,
-      unit: "건",
-      icon: "📋",
-      className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50",
-      valueClass: "text-white",
-      clickable: true,
-    },
-    {
-      label: "긴급 · 주의",
-      value: urgentCount,
-      unit: "건",
-      icon: "⚠️",
-      className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30",
-      valueClass: "text-amber-300",
-      clickable: false,
-    },
-    {
-      label: "오늘 일정",
-      value: todayScheduleCount,
-      unit: "건",
-      icon: "📅",
-      className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30",
-      valueClass: "text-sky-300",
-      clickable: false,
-    },
+  const cards: { key: "today_task" | "urgent" | "today_schedule"; label: string; value: number; unit: string; icon: string; className: string; valueClass: string }[] = [
+    { key: "today_task", label: "오늘의 할 일", value: todayTaskCount, unit: "건", icon: "📋", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
+    { key: "urgent", label: "긴급 · 주의", value: urgentCount, unit: "건", icon: "⚠️", className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30", valueClass: "text-amber-300" },
+    { key: "today_schedule", label: "오늘 일정", value: todayScheduleCount, unit: "건", icon: "📅", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
   ];
 
   return (
     <div className="grid gap-5 sm:grid-cols-3">
       {cards.map((card) => {
-        const isTodayCard = card.label === "오늘의 할 일";
-        const active = isTodayCard && filterTodayActive;
-        const canClick = isTodayCard && onTodayClick;
+        const active = filterMode === card.key;
+        const canClick = Boolean(onFilter || onClearFilter);
+        const handleClick = () => {
+          if (active && onClearFilter) onClearFilter();
+          else if (!active && onFilter) onFilter(card.key);
+        };
         return (
           <div
-            key={card.label}
+            key={card.key}
             role={canClick ? "button" : undefined}
             tabIndex={canClick ? 0 : undefined}
-            onClick={canClick ? (active && onClearTodayFilter ? onClearTodayFilter : onTodayClick) : undefined}
+            onClick={canClick ? handleClick : undefined}
             onKeyDown={
               canClick
                 ? (e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      if (active && onClearTodayFilter) onClearTodayFilter();
-                      else onTodayClick?.();
+                      handleClick();
                     }
                   }
                 : undefined
@@ -74,9 +54,9 @@ export default function SummaryCards({
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {card.label}
-              {active && (
+              {active && onClearFilter && (
                 <span className="ml-2 text-emerald-400">
-                  · 필터 적용 중 <button type="button" className="underline" onClick={(e) => { e.stopPropagation(); onClearTodayFilter?.(); }}>해제</button>
+                  · 필터 적용 중 <button type="button" className="underline" onClick={(e) => { e.stopPropagation(); onClearFilter(); }}>해제</button>
                 </span>
               )}
             </p>

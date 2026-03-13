@@ -78,6 +78,40 @@ export function isDeadlineTodayKST(deadline: string | null): boolean {
   return getDateKeyKST(deadline) === getTodayDateKeyKST();
 }
 
+/** 내일 날짜 키 (YYYY-MM-DD) - 한국 시간 기준 */
+export function getTomorrowDateKeyKST(): string {
+  const todayKey = getTodayDateKeyKST();
+  const d = new Date(todayKey + "T12:00:00+09:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 마감일이 내일(한국 시간)인지 여부 */
+export function isDeadlineTomorrowKST(deadline: string | null): boolean {
+  if (!deadline || !deadline.trim()) return false;
+  return getDateKeyKST(deadline) === getTomorrowDateKeyKST();
+}
+
+/** 마감일 포맷 "03/14 (토)" - 한국 시간, 대시보드 표시용 */
+export function formatDeadlineWithWeekday(deadline: string | null): string {
+  if (!deadline || !deadline.trim()) return "";
+  try {
+    const d = new Date(deadline);
+    const opts: Intl.DateTimeFormatOptions = { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit" };
+    const parts = new Intl.DateTimeFormat("ko-KR", opts).formatToParts(d);
+    let month = "";
+    let day = "";
+    for (const p of parts) {
+      if (p.type === "month") month = p.value.padStart(2, "0");
+      if (p.type === "day") day = p.value.padStart(2, "0");
+    }
+    const w = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(d);
+    return `${month}/${day} (${w})`;
+  } catch {
+    return deadline.slice(0, 10);
+  }
+}
+
 /** 일정 목록을 일자별로 묶고, 일자·시간 순 정렬 (오래된 일자 먼저, 같은 일자면 시간 순) */
 export function groupScheduleByDate(chats: ChatRow[]): { dateKey: string; dateLabel: string; items: ChatRow[] }[] {
   const sorted = [...chats].sort(

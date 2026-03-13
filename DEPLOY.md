@@ -54,6 +54,20 @@
 
 배포 URL은 예: `https://line-secretary-dashboard-xxx.vercel.app` 형태입니다.
 
+### Vercel에서 바뀐 거 보기 (푸시 시 자동 배포)
+
+1. **한 번만 연결**  
+   Vercel에서 **Import Git Repository**로 `Bbg3313/line-secretary-bot` (또는 본인 fork) 선택 후, **Root Directory**를 `dashboard`로 설정하고 환경 변수 넣고 Deploy.
+
+2. **이후에는**  
+   `git push origin main` 하면 Vercel이 자동으로 새 배포를 만듦.  
+   - Vercel 대시보드 → 해당 프로젝트 → **Deployments** 에서 진행 중/완료 확인.  
+   - **Production** 배포가 끝나면 배포 URL에서 바로 바뀐 화면 확인 가능.
+
+3. **자동 배포가 안 될 때**  
+   - Vercel 프로젝트 **Settings** → **Git** → **Production Branch** 가 `main` 인지 확인.  
+   - 수동 배포: **Deployments** → **Redeploy** (최신 커밋 기준으로 다시 빌드).
+
 ---
 
 # Render.com 배포 (LINE 봇 웹훅 서버, ngrok 대체)

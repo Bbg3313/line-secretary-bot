@@ -4,20 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-
-function formatDeadline(deadline: string | null): string {
-  if (!deadline) return "—";
-  try {
-    const formatter = new Intl.DateTimeFormat("ko-KR", {
-      timeZone: "Asia/Seoul",
-      month: "numeric",
-      day: "numeric",
-    });
-    return formatter.format(new Date(deadline));
-  } catch {
-    return deadline.slice(0, 10);
-  }
-}
+import {
+  formatDeadlineWithWeekday,
+  isDeadlineTodayKST,
+  isDeadlineTomorrowKST,
+} from "@/lib/scheduleUtils";
 
 function statusLabel(s: string): string {
   if (s === "완료" || s === "done") return "완료";
@@ -48,13 +39,35 @@ function truncateContent(text: string, maxLen = 80): string {
 
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
+
+/** 마감기한 셀: 오늘 [오늘] 빨강, 내일 [내일] 주황, 없으면 기한 없음, 형식 03/14 (토) */
+function DeadlineCell({ deadline }: { deadline: string | null }) {
+  if (!deadline || !deadline.trim()) {
+    return <span className="text-slate-500">기한 없음</span>;
+  }
+  const text = formatDeadlineWithWeekday(deadline) || deadline.slice(0, 10);
+  const isToday = isDeadlineTodayKST(deadline);
+  const isTomorrow = isDeadlineTomorrowKST(deadline);
+  return (
+    <span className={`font-mono ${isToday ? "text-red-400" : isTomorrow ? "text-amber-400" : "text-slate-300"}`}>
+      {text}
+      {isToday && (
+        <span className="ml-1.5 rounded bg-red-500/30 px-1.5 py-0.5 text-xs font-medium text-red-300">오늘</span>
+      )}
+      {isTomorrow && !isToday && (
+        <span className="ml-1.5 rounded bg-amber-500/30 px-1.5 py-0.5 text-xs font-medium text-amber-300">내일</span>
+      )}
+    </span>
+  );
+}
+
 type TaskTableProps = {
   tasks: TaskRow[];
-  filterTodayActive?: boolean;
-  onClearTodayFilter?: () => void;
+  filterMode?: "today_task" | "urgent" | "today_schedule" | null;
+  onClearFilter?: () => void;
 };
 
-export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter }: TaskTableProps) {
+export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTableProps) {
   const router = useRouter();
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
@@ -79,12 +92,15 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
     router.refresh();
   }
 
+  // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
   const sorted = [...tasks].sort((a, b) => {
-    const da = a.deadline || "";
-    const db = b.deadline || "";
-    if (da && db) return da.localeCompare(db);
-    if (da) return -1;
-    if (db) return 1;
+    const da = (a.deadline || "").trim();
+    const db = (b.deadline || "").trim();
+    if (!da && !db) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (!da) return 1;
+    if (!db) return -1;
+    const cmp = da.localeCompare(db);
+    if (cmp !== 0) return cmp;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
@@ -97,6 +113,15 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
     return full.length <= 40 ? full : full.slice(0, 40) + "…";
   };
 
+  const filterLabel =
+    filterMode === "today_task"
+      ? "오늘의 할 일"
+      : filterMode === "urgent"
+        ? "긴급 · 주의"
+        : filterMode === "today_schedule"
+          ? "오늘 일정"
+          : null;
+
   return (
     <section className="rounded-xl border border-slate-600/80 bg-[#1e293b] p-6 shadow-xl">
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -104,9 +129,9 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
           <span className="text-2xl" aria-hidden>📋</span>
           업무 관리
         </h2>
-        {filterTodayActive && onClearTodayFilter && (
+        {filterLabel && onClearFilter && (
           <span className="rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300">
-            오늘 마감만 표시 중 <button type="button" className="ml-1 font-medium underline hover:no-underline" onClick={onClearTodayFilter}>해제</button>
+            {filterLabel} 필터 적용 중 <button type="button" className="ml-1 font-medium underline hover:no-underline" onClick={onClearFilter}>해제</button>
           </span>
         )}
       </div>
@@ -134,7 +159,7 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(getStatus(row)) ? "opacity-60 bg-slate-800/40" : ""
+                    isDone(getStatus(row)) ? "opacity-50 bg-slate-800/40 [&_td]:line-through" : ""
                   }`}
                 >
                   <td
@@ -172,8 +197,8 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
                   <td className="px-4 py-3 text-slate-300">
                     {row.task_type?.trim() || "개인"}
                   </td>
-                  <td className="px-4 py-3 font-mono text-slate-300">
-                    {formatDeadline(row.deadline)}
+                  <td className="px-4 py-3">
+                    <DeadlineCell deadline={row.deadline} />
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -185,7 +210,7 @@ export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter
                   <td className="max-w-[220px] px-4 py-3 text-slate-200">
                     <button
                       type="button"
-                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}`}
+                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "opacity-80" : "font-medium"}`}
                       onClick={() => setContentPopup({ title: row.title || "—", description: row.description || "—" })}
                       title="전체 내용 보기"
                     >
