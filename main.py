@@ -74,22 +74,22 @@ GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에
 메시지: {message}
 """
 
-# 원자화: 메시지에 포함된 업무를 개별 단위로 분리해 JSON 추출 (모든 필드 반드시 채우기)
+# 원자화: 메시지에서 업무 추출 (병원·유형·마감·핵심 키워드 반드시 채우기)
 GEMINI_EXTRACT_PROMPT = """당신은 업무 추출 API입니다. JSON만 출력하세요. 설명·마크다운·코드블록 금지.
 
-오늘 날짜: {today_ymd} (이 날짜 기준으로 "내일" = 다음날 YYYY-MM-DD로 계산)
+오늘 날짜: {today_ymd} ("내일"이면 이 날짜+1일을 YYYY-MM-DD로 넣기)
 
-필수 규칙 (위반 시 안 됨):
-1. summary: 전체 한 줄 요약 (예: "의원 업무 3건"). "일정·업무 요약" 같은 문구 금지.
-2. tasks: 업무 하나당 객체 하나. 각 객체에 반드시 아래 5개 키 모두 넣기.
-   - title: 해당 업무 핵심만 10자 내외 (예: "Clyve SNS 게시", "예산 증액"). 기계적 문구 금지.
-   - hospital_name: 메시지에 나온 병원·의원·고객명 (Jy, Thebb, Delp, Clyve, AIDA, 삼성 등). 없으면 "기타"로 채우기. null 금지.
+필수 규칙:
+1. summary: 전체 한 줄 (예: "의원 업무 3건"). "일정", "업무 요약" 같은 문구 절대 금지.
+2. tasks: 업무마다 객체 하나. 5개 키 반드시 채우기.
+   - title: 워딩을 압축한 핵심 키워드만 3~7단어 (예: "메타 페이지 개설", "ROAS 주간 보고", "태국어 번역 수정"). "일정", "업무", "요약" 단어 사용 금지. 문장 말고 명사/동사 중심 키워드만.
+   - hospital_name: 메시지에 나온 병원·의원·고객명 (Jy, Thebb, Delp, Clyve, AIDA 등). 없으면 반드시 "기타".
    - task_type: 반드시 "마케팅"|"행정"|"CS"|"미팅"|"개인" 중 하나. 모르면 "개인".
-   - deadline: 메시지에 "내일","모레","다음 주 월요일" 등 나오면 오늘({today_ymd}) 기준으로 YYYY-MM-DD로 계산해 넣기. 없으면 null.
-   - description: 해당 업무 한 줄 요약 (20자 내외). 필수.
+   - deadline: "내일","모레","다음 주 O요일" 있으면 오늘({today_ymd}) 기준 YYYY-MM-DD로 계산. 없으면 null.
+   - description: 해당 업무 한 줄 설명 (필수).
 
-출력 예시 (이 형식만):
-{{"summary":"의원·미팅 2건","tasks":[{{"title":"Clyve SNS 게시","hospital_name":"Clyve","task_type":"마케팅","deadline":"{today_ymd}","description":"SNS 게시물 작성"}},{{"title":"AIDA 개발팀 미팅","hospital_name":"AIDA","task_type":"미팅","deadline":null,"description":"미팅 링크 공유"}}]}}
+출력 예시:
+{{"summary":"의원·미팅 2건","tasks":[{{"title":"메타 페이지 개설","hospital_name":"Clyve","task_type":"마케팅","deadline":"{today_ymd}","description":"태국 진출용 메타 페이지 개설"}},{{"title":"개발팀 미팅 링크","hospital_name":"AIDA","task_type":"미팅","deadline":null,"description":"미팅 링크 생성 공유"}}]}}
 
 메시지:
 {message}
@@ -210,7 +210,10 @@ def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
             if not desc:
                 continue
             if not title or re.search(r"일정\s*·?\s*업무\s*요약|업무\s*요약", (title or "")):
-                title = (desc[:20] if len(desc) > 20 else desc).strip() or "업무"
+                # 기계 문구 제거 후 설명에서 핵심만 앞 20자
+                candidate = re.sub(r"일정\s*·?\s*업무\s*요약|업무\s*요약", "", desc).strip()
+                candidate = re.sub(r"^(이번\s*주|이번주|해야\s*할|하고\s*|있습니다|합니다|해\s*요|돼)\s*", "", candidate, flags=re.I).strip()
+                title = (candidate[:20] if len(candidate) > 20 else candidate).strip() or "업무"
             def _str_or_none(v) -> str | None:
                 if v is None: return None
                 if isinstance(v, str): return v.strip() or None
@@ -365,8 +368,8 @@ def save_tasks_to_supabase(
             "source_message": source_message,
             "title": title_str,
             "description": desc,
-            "hospital_name": t.get("hospital_name") or None,
-            "task_type": t.get("task_type") or None,
+            "hospital_name": (t.get("hospital_name") or "").strip() or "기타",
+            "task_type": (t.get("task_type") or "").strip() or "개인",
             "status": "대기",
             "deadline": deadline,
         }

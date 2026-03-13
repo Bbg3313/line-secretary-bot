@@ -46,16 +46,22 @@ function truncateContent(text: string, maxLen = 80): string {
   return t.slice(0, maxLen) + "…";
 }
 
-/** 내용 컬럼용: "일정·업무 요약" 등 기계 문구 제거, 20자 이내 명확한 요약만 */
+/** 기계 문구 제거 (일정·업무·요약 관련) */
+const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
+/** 문장 앞쪽 허수어 제거 후 핵심만 */
+const FILLER = /^(이번\s*주|이번주|다음\s*주|해야\s*할|하고\s*|있습니다|합니다|해\s*요|돼\s*|\.\.\.)\s*/gi;
+
+/** 내용 컬럼: 핵심 키워드만 20자 이내로 압축해 표시 (잘라내기 말고 워딩 압축) */
 function contentSummary(row: TaskRow): string {
-  const raw = (row.title || row.description || "").trim();
+  let raw = (row.title || row.description || "").trim();
+  raw = raw.replace(GENERIC_PHRASE, "").trim();
+  if (!raw) {
+    const desc = (row.description || "").replace(GENERIC_PHRASE, "").trim();
+    raw = desc.replace(FILLER, "").trim();
+  }
   if (!raw) return "—";
-  const skip = /일정\s*·?\s*업무\s*요약|업무\s*요약|일정\s*업무/i;
-  const use = skip.test(raw) ? (row.description || row.title || "").trim() : raw;
-  const one = (use || "").trim();
-  if (!one) return "—";
-  const out = one.length <= 20 ? one : one.slice(0, 20) + "…";
-  return out || "—";
+  const one = raw.length <= 20 ? raw : raw.slice(0, 20) + "…";
+  return one.trim() || "—";
 }
 
 export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
@@ -155,10 +161,10 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-200">
-                    {row.hospital_name?.trim() || "—"}
+                    {row.hospital_name?.trim() || "기타"}
                   </td>
                   <td className="px-4 py-3 text-slate-300">
-                    {row.task_type?.trim() || "—"}
+                    {row.task_type?.trim() || "개인"}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-300">
                     {formatDeadline(row.deadline)}
