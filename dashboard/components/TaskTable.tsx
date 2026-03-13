@@ -140,7 +140,7 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                       </span>
                       {displaySub(row) && (
                         <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">
-                          {truncateContent(displaySub(row), 80)}
+                          {truncateContent(displaySub(row) ?? "", 80)}
                         </p>
                       )}
                     </div>
