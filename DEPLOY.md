@@ -93,10 +93,15 @@
    - `[웹훅] 서명 오류` → **CHANNEL_SECRET**이 LINE 채널 기본 설정의 Channel secret과 일치하는지 확인.  
    - `[웹훅] 처리 중 오류` → 나오는 에러 메시지대로 환경 변수(GEMINI, SUPABASE 등) 또는 네트워크 문제 확인.
 
-3. **LINE Developers 확인**  
-   - **Messaging API** 탭에서 **Webhook URL**이 `https://...onrender.com/callback` (끝에 `/callback`) 인지.  
-   - **Webhook** 설정이 **Use** 로 켜져 있는지.  
-   - **Verify** 버튼으로 성공 나오는지.
+3. **LINE Developers 확인 (답장이 안 오면 여기 먼저)**  
+   - **Webhook URL**을 **정확히** 아래처럼 넣습니다. (주소만 본인 서비스로 바꾸세요.)  
+     `https://line-secretary-bot-xxxx.onrender.com/callback`  
+     - 반드시 **https**  
+     - 끝에 **/callback** 포함 (또는 `/webhook` 둘 다 동작)  
+     - 오타 없이 (예: onrender.com, 렌더 주소 맞는지)  
+   - **Webhook** 설정을 **Use** 로 켜둡니다.  
+   - **Verify** 버튼 눌러서 **성공** 나오는지 확인합니다.  
+   - **Render 로그**에서 메시지 보낼 때 `[요청] POST /callback` 이 안 보이면 → LINE이 우리 서버로 요청을 안 보내는 것. 위 URL과 Use 설정을 다시 확인합니다.
 
 ## 5. 서버 실행 명령어 정리
 

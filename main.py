@@ -55,6 +55,16 @@ handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 _executor = ThreadPoolExecutor(max_workers=2)
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """모든 요청 로그 (LINE POST 오는지 확인용)."""
+    method = request.method
+    path = request.url.path
+    print(f"[요청] {method} {path}")
+    response = await call_next(request)
+    return response
+
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # 일정/할일 분석용 프롬프트 (구 레거시)
