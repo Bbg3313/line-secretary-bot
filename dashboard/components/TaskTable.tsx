@@ -96,6 +96,7 @@ export default function TaskTable({
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"대기" | "진행중" | "완료" | "긴급" | null>(null);
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
@@ -176,8 +177,23 @@ export default function TaskTable({
     router.refresh();
   }
 
+  // 상태별 개수 (상태 탭 표시용)
+  const statusCounts = tasks.reduce(
+    (acc, t) => {
+      const s = statusLabel(t.status);
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  // 상태 필터 적용
+  const filteredByStatus = statusFilter
+    ? tasks.filter((t) => statusLabel(t.status) === statusFilter)
+    : tasks;
+
   // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
-  const sorted = [...tasks].sort((a, b) => {
+  const sorted = [...filteredByStatus].sort((a, b) => {
     const da = (a.deadline || "").trim();
     const db = (b.deadline || "").trim();
     if (!da && !db) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -221,7 +237,7 @@ export default function TaskTable({
       </div>
 
       {/* 퀵 필터 바 */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-600/60 bg-slate-800/20 px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-slate-600/60 bg-slate-800/20 px-4 py-3">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">병원</span>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -259,6 +275,31 @@ export default function TaskTable({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* 상태 탭 */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-400">
+        <span className="font-medium">상태</span>
+        {[
+          { key: null as "대기" | "진행중" | "완료" | "긴급" | null, label: "전체" },
+          { key: "대기" as const, label: `대기 (${statusCounts["대기"] || 0})` },
+          { key: "진행중" as const, label: `진행중 (${statusCounts["진행중"] || 0})` },
+          { key: "완료" as const, label: `완료 (${statusCounts["완료"] || 0})` },
+          { key: "긴급" as const, label: `긴급 (${statusCounts["긴급"] || 0})` },
+        ].map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => setStatusFilter(item.key)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              statusFilter === item.key
+                ? "bg-slate-100 text-slate-900"
+                : "bg-slate-700/40 text-slate-300 hover:bg-slate-600/60"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-slate-600/60 bg-slate-800/30 scrollbar-thin">
