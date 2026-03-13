@@ -38,12 +38,24 @@ function statusBadgeClass(s: string): string {
   return "bg-blue-500/20 text-blue-300 border-blue-500/40";
 }
 
-/** 내용 80자까지 보여주고 나머지는 말줄임 */
+/** 내용 maxLen자까지만 보여주고 나머지는 말줄임 */
 function truncateContent(text: string, maxLen = 80): string {
   if (!text) return "—";
   const t = text.trim();
   if (t.length <= maxLen) return t;
   return t.slice(0, maxLen) + "…";
+}
+
+/** 내용 컬럼용: "일정·업무 요약" 등 기계 문구 제거, 20자 이내 명확한 요약만 */
+function contentSummary(row: TaskRow): string {
+  const raw = (row.title || row.description || "").trim();
+  if (!raw) return "—";
+  const skip = /일정\s*·?\s*업무\s*요약|업무\s*요약|일정\s*업무/i;
+  const use = skip.test(raw) ? (row.description || row.title || "").trim() : raw;
+  const one = (use || "").trim();
+  if (!one) return "—";
+  const out = one.length <= 20 ? one : one.slice(0, 20) + "…";
+  return out || "—";
 }
 
 export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
@@ -79,8 +91,6 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const displayContent = (row: TaskRow) => row.title || row.description || "—";
-  const displaySub = (row: TaskRow) => (row.title && row.description ? row.description : null);
 
   return (
     <section className="rounded-xl border border-slate-600/80 bg-[#1e293b] p-6 shadow-xl">
@@ -160,20 +170,12 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[360px] px-4 py-3 text-slate-200">
-                    <div className="block break-words">
-                      <span
-                        className={isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}
-                        title={row.description || row.title || undefined}
-                      >
-                        {truncateContent(displayContent(row), 80)}
-                      </span>
-                      {displaySub(row) && (
-                        <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">
-                          {truncateContent(displaySub(row) ?? "", 80)}
-                        </p>
-                      )}
-                    </div>
+                  <td className="max-w-[200px] px-4 py-3 text-slate-200" title={row.description || row.title || undefined}>
+                    <span
+                      className={isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}
+                    >
+                      {contentSummary(row)}
+                    </span>
                   </td>
                 </tr>
               ))

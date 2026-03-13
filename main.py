@@ -209,8 +209,8 @@ def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
                 desc = title
             if not desc:
                 continue
-            if not title:
-                title = desc[:30] if len(desc) > 30 else desc
+            if not title or re.search(r"일정\s*·?\s*업무\s*요약|업무\s*요약", (title or "")):
+                title = (desc[:20] if len(desc) > 20 else desc).strip() or "업무"
             def _str_or_none(v) -> str | None:
                 if v is None: return None
                 if isinstance(v, str): return v.strip() or None
@@ -309,8 +309,8 @@ def insert_one_task_row(
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
     desc = (description or source_message or "업무 내용")[:500].strip() or "업무 내용"
     title_str = (title or desc[:50] or "업무").strip()
-    if title_str == "일정·업무 요약":
-        title_str = desc[:30] if len(desc) > 30 else desc
+    if re.search(r"일정\s*·?\s*업무\s*요약|업무\s*요약", title_str):
+        title_str = (desc[:20] if len(desc) > 20 else desc).strip() or "업무"
     row = {
         "chat_id": chat_id,
         "line_user_id": line_user_id,
@@ -352,9 +352,9 @@ def save_tasks_to_supabase(
         desc = (t.get("description") or t.get("title") or "").strip()
         if not desc:
             continue
-        title_str = (t.get("title") or desc[:50] or "").strip() or desc[:30]
-        if title_str == "일정·업무 요약":
-            title_str = desc[:30]
+        title_str = (t.get("title") or desc[:50] or "").strip() or desc[:20]
+        if not title_str or re.search(r"일정\s*·?\s*업무\s*요약|업무\s*요약", title_str):
+            title_str = (desc[:20] if len(desc) > 20 else desc).strip() or "업무"
         deadline = t.get("deadline") or None
         if deadline and isinstance(deadline, str) and len(deadline.strip()) == 10:
             deadline = f"{deadline.strip()}T23:59:59Z"
