@@ -161,9 +161,18 @@ export default function TaskTable({
   }, {} as Record<string, number>);
 
   // 상태 필터 적용 — getStatus 사용해서 드롭다운 변경 직후 필터에도 반영
-  const filteredByStatus = statusFilter
-    ? tasks.filter((t) => statusLabel(getStatus(t)) === statusFilter)
-    : tasks;
+  // 요구사항: "완료" 상태는 기본(전체) 목록에서는 숨기고, "완료" 탭에서만 보여준다.
+  const filteredByStatus = tasks.filter((t) => {
+    const label = statusLabel(getStatus(t));
+    // 완료 탭: 완료만
+    if (statusFilter === "완료") return label === "완료";
+    // 나머지 탭 / 전체: 완료는 항상 숨김
+    if (label === "완료") return false;
+    // 전체 탭(null)이면 완료를 제외한 모든 상태 노출
+    if (!statusFilter) return true;
+    // 특정 상태 탭이면 해당 상태만
+    return label === statusFilter;
+  });
 
   // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
   const sorted = [...filteredByStatus].sort((a, b) => {
