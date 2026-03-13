@@ -58,7 +58,7 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   );
 }
 
-const STATUS_OPTIONS = ["대기", "진행중", "긴급", "완료"] as const;
+const STATUS_OPTIONS = ["대기", "완료"] as const;
 const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 
 type TaskTableProps = {
@@ -361,15 +361,32 @@ export default function TaskTable({
                       value={getAssignee(row)}
                       onChange={async (e) => {
                         const next = e.target.value;
+                        const nextStatus = next === "미정" ? "대기" : "완료";
                         setLocalAssignee((prev) => ({ ...prev, [row.id]: next }));
+                        setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus }));
                         const { error } = await supabase
                           .from("tasks")
-                          .update({ assignee: next })
+                          .update({ assignee: next, status: nextStatus })
                           .eq("id", row.id);
                         if (error) {
                           console.error(error);
+                          // 아직 Supabase tasks 테이블에 assignee/status 컬럼이 없으면 경고만 찍고 UI는 유지
+                          if (
+                            String(error.message || "").includes("assignee") ||
+                            String(error.message || "").includes("status")
+                          ) {
+                            console.warn(
+                              "tasks 테이블에 assignee/status 컬럼이 없어 로컬 상태로만 담당자를 변경합니다.",
+                            );
+                            return;
+                          }
                           alert("담당자 변경 실패: " + error.message);
                           setLocalAssignee((prev) => {
+                            const u = { ...prev };
+                            delete u[row.id];
+                            return u;
+                          });
+                          setLocalStatus((prev) => {
                             const u = { ...prev };
                             delete u[row.id];
                             return u;
@@ -391,17 +408,11 @@ export default function TaskTable({
                     <DeadlineCell deadline={row.deadline} />
                   </td>
                   <td className="px-4 py-4">
-                    <select
-                      value={statusLabel(getStatus(row))}
-                      onChange={(e) => updateStatus(row.id, e.target.value)}
-                      className={`rounded-md border px-2 py-1 text-xs font-medium bg-transparent ${statusBadgeClass(getStatus(row))} focus:outline-none`}
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(getStatus(row))}`}
                     >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s} className="bg-slate-800 text-slate-100">
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                      {statusLabel(getStatus(row))}
+                    </span>
                   </td>
                   <td className="max-w-[220px] px-4 py-4 text-slate-200">
                     <button
@@ -414,27 +425,38 @@ export default function TaskTable({
                     </button>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-row flex-nowrap items-center gap-2">
                       <button
                         type="button"
                         onClick={async () => {
                           if (dispatched[row.id]) return;
                           const assignee = getAssignee(row);
+                          if (assignee === "미정") {
+                            alert("담당자를 먼저 선택해 주세요.");
+                            return;
+                          }
+                          // 지시 시에는 요약이 아닌 전체 내용을 사용하도록, 전체 텍스트를 구성
+                          const fullTitle = (row.title || "").trim() || "제목 없음";
+                          const fullDescription =
+                            (row.description || "").trim() || fullTitle;
+                          // TODO: LINE 메시지 발송 API 연동 시 아래 payload를 그대로 사용
+                          console.log("DISPATCH_TASK_PAYLOAD", {
+                            id: row.id,
+                            assignee,
+                            title: fullTitle,
+                            description: fullDescription,
+                          });
                           const confirmed = confirm(
                             `담당자 [${assignee}]에게 업무를 지시하시겠습니까?`,
                           );
                           if (!confirmed) return;
                           setDispatched((prev) => ({ ...prev, [row.id]: true }));
-                          // 상태가 대기라면 진행중으로 자동 전환
-                          if (statusLabel(getStatus(row)) === "대기") {
-                            await updateStatus(row.id, "진행중");
-                          }
                         }}
                         disabled={dispatched[row.id]}
-                        className={`mr-1 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
                           dispatched[row.id]
                             ? "bg-slate-700/80 text-slate-400 cursor-default"
-                            : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                            : "bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/40"
                         }`}
                       >
                         <span aria-hidden>🚀</span>
