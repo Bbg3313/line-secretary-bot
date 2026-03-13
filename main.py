@@ -59,14 +59,19 @@ GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에
 메시지: {message}
 """
 
-# 원자화: 메시지에서 개별 업무(Task) 추출용 — 반드시 유효한 JSON만 출력
-GEMINI_EXTRACT_PROMPT = """다음 메시지에서 "할 일(Task)"을 개별 단위로 쪼개서 추출해줘.
-- summary: 전체를 한 줄로 요약 (예: "의원 광고·미팅 일정 3건")
-- tasks: 할 일이 있으면 배열로, 없으면 빈 배열 []
-  각 항목: title(업무 제목), hospital_name(병원/의원명, 없으면 null), task_type(광고|미팅|개인 중 하나, 없으면 null), deadline(마감일 YYYY-MM-DD, 없으면 null)
-반드시 아래 JSON 형식만 출력하고 다른 글은 넣지 마세요.
+# 원자화: 메시지에 포함된 업무를 개별 단위로 분리해 JSON 추출
+GEMINI_EXTRACT_PROMPT = """다음 메시지에 포함된 "할 일(업무)"을 하나씩 개별로 분리해서 추출해줘.
+각 업무마다 다음을 채워줘. 반드시 아래 JSON 형식만 출력하고 다른 글은 넣지 마세요.
 
-{"summary":"...","tasks":[{"title":"...","hospital_name":"... 또는 null","task_type":"광고|미팅|개인 또는 null","deadline":"YYYY-MM-DD 또는 null"}]}
+- summary: 전체를 한 줄 요약 (예: "의원 업무 3건")
+- tasks: 업무가 있으면 배열, 없으면 []
+  각 항목:
+  - hospital_name: 병원/의원명. 예시로 나온 이름(Jy, Thebb, our, Delp, Clyve 등)이 있으면 그대로, 없으면 null
+  - task_type: "마케팅" 또는 "미팅" 또는 "개인" 중 하나, 없으면 null
+  - deadline: 마감일 YYYY-MM-DD (예: 2025-03-15), 없으면 null
+  - description: 해당 업무 내용 한 줄 요약 (필수)
+
+{"summary":"...","tasks":[{"hospital_name":"... 또는 null","task_type":"마케팅|미팅|개인 또는 null","deadline":"YYYY-MM-DD 또는 null","description":"업무 내용 요약"}]}
 
 메시지:
 {message}
@@ -100,7 +105,6 @@ def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
     raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(message=text))
     summary = "일정·업무 요약"
     tasks: list[dict] = []
-    # JSON 블록만 추출 (```json ... ``` 또는 그냥 {...})
     json_match = re.search(r"\{[\s\S]*\}", raw)
     if json_match:
         try:
@@ -109,11 +113,11 @@ def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
             for t in data.get("tasks") or []:
                 if not isinstance(t, dict):
                     continue
-                title = (t.get("title") or "").strip()
-                if not title:
+                desc = (t.get("description") or t.get("title") or "").strip()
+                if not desc:
                     continue
                 tasks.append({
-                    "title": title,
+                    "description": desc,
                     "hospital_name": (t.get("hospital_name") or "").strip() or None,
                     "task_type": (t.get("task_type") or "").strip() or None,
                     "deadline": (t.get("deadline") or "").strip() or None,
@@ -179,7 +183,7 @@ def save_tasks_to_supabase(
     source_message: str,
     tasks: list[dict],
 ) -> None:
-    """Supabase tasks 테이블에 업무 단위로 행 삽입."""
+    """Supabase tasks 테이블에 업무 단위로 행 삽입 (병원명, 업무유형, 마감, 내용, 상태 대기)."""
     if not tasks:
         return
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
@@ -190,22 +194,23 @@ def save_tasks_to_supabase(
         "Prefer": "return=minimal",
     }
     for t in tasks:
-        title = (t.get("title") or "").strip()
-        if not title:
+        desc = (t.get("description") or "").strip()
+        if not desc:
             continue
+        deadline = t.get("deadline") or None
+        if deadline and isinstance(deadline, str) and len(deadline.strip()) == 10:
+            deadline = f"{deadline.strip()}T23:59:59Z"
         row = {
             "chat_id": chat_id,
             "line_user_id": line_user_id,
             "line_group_id": line_group_id,
             "source_message": source_message,
-            "title": title,
-            "hospital_name": t.get("hospital_name"),
-            "task_type": t.get("task_type"),
-            "status": "pending",
-            "deadline": t.get("deadline") or None,
+            "description": desc,
+            "hospital_name": t.get("hospital_name") or None,
+            "task_type": t.get("task_type") or None,
+            "status": "대기",
+            "deadline": deadline,
         }
-        if row["deadline"] and len(row["deadline"]) == 10:
-            row["deadline"] = f"{row['deadline']}T23:59:59Z"
         resp = requests.post(url, headers=headers, json=row, timeout=15)
         if resp.status_code >= 400:
             print(f"[tasks insert 경고] {resp.status_code} {resp.text}")
@@ -282,7 +287,7 @@ def fetch_tasks_from_supabase(limit: int = 100) -> list[dict]:
         "Content-Type": "application/json",
     }
     params = {
-        "select": "id,title,hospital_name,task_type,status,deadline,created_at",
+        "select": "id,chat_id,title,description,hospital_name,task_type,status,deadline,created_at",
         "order": "created_at.desc",
         "limit": str(limit),
     }
@@ -341,7 +346,7 @@ def format_task_reply(rows: list[dict], max_len: int = 4500) -> str:
         return "📋 아직 수집된 미완료 업무가 없어요. 할 일을 채팅에 말해 주시면 저장해 둘게요."
     lines = ["📋 미완료 업무예요.\n"]
     for r in rows[:20]:
-        title = (r.get("title") or r.get("raw_message") or "").strip()
+        title = (r.get("description") or r.get("title") or r.get("raw_message") or "").strip()
         if not title:
             continue
         hospital = (r.get("hospital_name") or "").strip()

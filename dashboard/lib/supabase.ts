@@ -20,13 +20,11 @@ export type TaskRow = {
   line_user_id: string | null;
   line_group_id: string | null;
   source_message: string | null;
-  title: string;
+  title: string | null;
+  description: string | null;
   hospital_name: string | null;
   task_type: string | null;
   status: string;
   deadline: string | null;
   created_at: string;
 };
-
-/** tasks 테이블 행 + 채팅에서 합쳐진 업무(표시용). fromTasksTable=false면 채팅 출처, 체크박스 비활성 */
-export type TaskDisplayRow = TaskRow & { fromTasksTable?: boolean };

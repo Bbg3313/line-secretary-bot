@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { TaskDisplayRow } from "@/lib/supabase";
+import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 
 function formatDeadline(deadline: string | null): string {
@@ -19,17 +19,20 @@ function formatDeadline(deadline: string | null): string {
 }
 
 function statusLabel(s: string): string {
-  if (s === "done") return "완료";
-  if (s === "in_progress") return "진행";
+  if (s === "완료" || s === "done") return "완료";
+  if (s === "진행중" || s === "in_progress") return "진행중";
   return "대기";
 }
 
-export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
+function isDone(s: string): boolean {
+  return s === "완료" || s === "done";
+}
+
+export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
   const router = useRouter();
 
-  async function toggleDone(id: string, current: string, fromTasksTable: boolean) {
-    if (!fromTasksTable) return; // 채팅에서 온 행은 tasks 테이블에 없어서 업데이트 불가
-    const next = current === "done" ? "pending" : "done";
+  async function toggleDone(id: string, current: string) {
+    const next = isDone(current) ? "대기" : "완료";
     const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
     if (!error) router.refresh();
   }
@@ -42,6 +45,8 @@ export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
     if (db) return 1;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+
+  const displayContent = (row: TaskRow) => row.description || row.title || "—";
 
   return (
     <section className="rounded-xl border border-slate-700/80 bg-slate-900/50 p-6 shadow-xl">
@@ -58,14 +63,14 @@ export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
               <th className="w-24 px-4 py-3 font-medium text-slate-400">업무유형</th>
               <th className="w-28 px-4 py-3 font-medium text-slate-400">마감기한</th>
               <th className="w-20 px-4 py-3 font-medium text-slate-400">상태</th>
-              <th className="px-4 py-3 font-medium text-slate-400">제목</th>
+              <th className="px-4 py-3 font-medium text-slate-400">내용</th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-slate-500">
-                  아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 자동으로 채워져요.
+                  아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 개별 업무로 쪼개져 저장돼요.
                 </td>
               </tr>
             ) : (
@@ -73,16 +78,15 @@ export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/60 last:border-0 hover:bg-slate-700/30 transition ${
-                    row.status === "done" ? "opacity-70" : ""
+                    isDone(row.status) ? "opacity-80" : ""
                   }`}
                 >
                   <td className="px-3 py-2.5">
                     <input
                       type="checkbox"
-                      checked={row.status === "done"}
-                      disabled={row.fromTasksTable === false}
-                      onChange={() => toggleDone(row.id, row.status, row.fromTasksTable !== false)}
-                      className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
+                      checked={isDone(row.status)}
+                      onChange={() => toggleDone(row.id, row.status)}
+                      className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
                     />
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-200">
@@ -97,9 +101,9 @@ export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
                   <td className="px-4 py-2.5">
                     <span
                       className={
-                        row.status === "done"
+                        isDone(row.status)
                           ? "text-emerald-400"
-                          : row.status === "in_progress"
+                          : row.status === "진행중" || row.status === "in_progress"
                             ? "text-amber-400"
                             : "text-slate-400"
                       }
@@ -108,7 +112,9 @@ export default function TaskTable({ tasks }: { tasks: TaskDisplayRow[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-slate-200">
-                    {row.title}
+                    <span className={isDone(row.status) ? "line-through opacity-80" : ""}>
+                      {displayContent(row)}
+                    </span>
                   </td>
                 </tr>
               ))
