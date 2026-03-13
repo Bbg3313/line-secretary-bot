@@ -88,7 +88,6 @@ export default function TaskTable({
   onQuickTaskTypeChange,
 }: TaskTableProps) {
   const router = useRouter();
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
@@ -103,23 +102,6 @@ export default function TaskTable({
     if (error) {
       console.error(error);
       alert("상태 변경 실패: " + error.message);
-      setLocalStatus((prev) => {
-        const u = { ...prev };
-        delete u[id];
-        return u;
-      });
-      return;
-    }
-    router.refresh();
-  }
-
-  async function toggleDone(id: string, current: string) {
-    const next = isDone(current) ? "대기" : "완료";
-    setTogglingId(id);
-    setLocalStatus((prev) => ({ ...prev, [id]: next }));
-    const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
-    setTogglingId(null);
-    if (error) {
       setLocalStatus((prev) => {
         const u = { ...prev };
         delete u[id];
@@ -171,16 +153,16 @@ export default function TaskTable({
     router.refresh();
   }
 
-  // 상태별 개수 (상태 탭 표시용)
+  // 상태별 개수 (상태 탭 표시용) — 로컬 상태 반영해서 드롭다운 변경 시 즉시 숫자 갱신
   const statusCounts = tasks.reduce((acc, t) => {
-    const s = statusLabel(t.status);
+    const s = statusLabel(getStatus(t));
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  // 상태 필터 적용
+  // 상태 필터 적용 — getStatus 사용해서 드롭다운 변경 직후 필터에도 반영
   const filteredByStatus = statusFilter
-    ? tasks.filter((t) => statusLabel(t.status) === statusFilter)
+    ? tasks.filter((t) => statusLabel(getStatus(t)) === statusFilter)
     : tasks;
 
   // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
@@ -297,7 +279,6 @@ export default function TaskTable({
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
-              <th className="w-12 px-4 py-4 font-medium text-slate-400">완료</th>
               <th className="min-w-[100px] px-4 py-4 font-medium text-slate-400">병원명</th>
               <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">업무유형</th>
               <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">마감기한</th>
@@ -309,7 +290,7 @@ export default function TaskTable({
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center">
+                <td colSpan={6} className="py-12 text-center">
                   {totalTaskCount > 0 ? (
                     <div className="text-slate-400">
                       <p className="font-medium">필터 조건에 맞는 업무가 없어요.</p>
@@ -339,35 +320,6 @@ export default function TaskTable({
                     isDone(getStatus(row)) ? "opacity-50 bg-slate-800/40 [&_td]:line-through" : ""
                   }`}
                 >
-                  <td
-                    className="cursor-pointer px-4 py-4 align-middle"
-                    onClick={() => {
-                      if (togglingId === row.id) return;
-                      toggleDone(row.id, getStatus(row));
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        if (togglingId !== row.id) toggleDone(row.id, getStatus(row));
-                      }
-                    }}
-                  >
-                    <span className="inline-flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={isDone(getStatus(row))}
-                        disabled={togglingId === row.id}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          toggleDone(row.id, getStatus(row));
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-5 w-5 cursor-pointer rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
-                      />
-                    </span>
-                  </td>
                   <td className="px-4 py-4 font-medium text-slate-200">
                     {row.hospital_name?.trim() || "기타"}
                   </td>
