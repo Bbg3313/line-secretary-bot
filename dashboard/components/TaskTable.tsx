@@ -65,8 +65,10 @@ const STATUS_OPTIONS = ["대기", "진행중", "긴급", "완료"] as const;
 
 type TaskTableProps = {
   tasks: TaskRow[];
+  totalTaskCount?: number;
   filterMode?: "today_task" | "urgent" | "today_schedule" | null;
   onClearFilter?: () => void;
+  onClearAllFilters?: () => void;
   uniqueHospitals?: string[];
   uniqueTaskTypes?: string[];
   quickHospital?: string | null;
@@ -77,8 +79,10 @@ type TaskTableProps = {
 
 export default function TaskTable({
   tasks,
+  totalTaskCount = 0,
   filterMode,
   onClearFilter,
+  onClearAllFilters,
   uniqueHospitals = [],
   uniqueTaskTypes = [],
   quickHospital = null,
@@ -254,8 +258,26 @@ export default function TaskTable({
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-500">
-                  아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 개별 업무로 쪼개져 저장돼요.
+                <td colSpan={7} className="py-12 text-center">
+                  {totalTaskCount > 0 ? (
+                    <div className="text-slate-400">
+                      <p className="font-medium">필터 조건에 맞는 업무가 없어요.</p>
+                      <p className="mt-1 text-sm">필터를 해제하면 전체 목록을 볼 수 있어요.</p>
+                      {onClearAllFilters && (
+                        <button
+                          type="button"
+                          onClick={onClearAllFilters}
+                          className="mt-3 rounded-md bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500"
+                        >
+                          필터 모두 해제
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500">
+                      아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 개별 업무로 쪼개져 저장돼요.
+                    </p>
+                  )}
                 </td>
               </tr>
             ) : (

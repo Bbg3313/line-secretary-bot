@@ -1,5 +1,5 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import { hasSupabaseConfig, supabase, supabaseUrlPrefix } from "@/lib/supabase";
 import { getScheduleChats } from "@/lib/classify";
 import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST, isDeadlineTodayOrPastKST } from "@/lib/scheduleUtils";
 import DashboardContent from "@/components/DashboardContent";
@@ -70,6 +70,24 @@ export default async function DashboardPage() {
           <p className="mt-1 text-sm">
             {supabaseError} — Supabase 대시보드에서 <code className="rounded bg-black/30 px-1">supabase_rls_policies.sql</code>을 실행했는지 확인하고, anon key가 맞는지 확인해 주세요.
           </p>
+        </section>
+      )}
+      {hasSupabaseConfig && tasks.length === 0 && !supabaseError && (
+        <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-amber-200/90">
+          <p className="font-medium">데이터가 안 보일 때 확인</p>
+          <p className="mt-1 text-sm">
+            Supabase Table Editor에는 있는데 여기만 비어 있으면 → <strong>Vercel 환경 변수</strong>가 같은 프로젝트를 가리키는지 확인하세요.
+          </p>
+          <ul className="mt-2 list-inside list-disc text-sm">
+            <li>Vercel 프로젝트 → Settings → Environment Variables에 <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> 입력
+            </li>
+            <li>값 수정 후 반드시 <strong>Redeploy</strong> (NEXT_PUBLIC_* 는 빌드 시 적용됨)
+            </li>
+            <li>연결 중인 URL: <code className="break-all text-xs opacity-80">{supabaseUrlPrefix || "(비어 있음)"}</code> — Supabase 대시보드 Project URL과 앞부분이 같아야 함
+            </li>
+            <li>같은 프로젝트에서 <code className="rounded bg-black/30 px-1">supabase_rls_policies.sql</code> 실행했는지 확인
+            </li>
+          </ul>
         </section>
       )}
       {hasSupabaseConfig && (

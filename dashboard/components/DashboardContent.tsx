@@ -119,8 +119,14 @@ export default function DashboardContent({
       <section>
         <TaskTable
           tasks={tasksToShow}
+          totalTaskCount={tasks.length}
           filterMode={filterMode}
           onClearFilter={() => setFilterMode(null)}
+          onClearAllFilters={() => {
+            setFilterMode(null);
+            setQuickHospital(null);
+            setQuickTaskType(null);
+          }}
           uniqueHospitals={uniqueHospitals}
           uniqueTaskTypes={uniqueTaskTypes}
           quickHospital={quickHospital}
