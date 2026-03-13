@@ -47,22 +47,6 @@ export default async function DashboardPage() {
   const dueTodayCount = tasks.filter(
     (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
   ).length;
-  const dueTodayTasks = tasks.filter(
-    (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
-  );
-  const dueTodayExample =
-    dueTodayTasks[0]?.hospital_name && dueTodayTasks[0]?.title
-      ? `${dueTodayTasks[0].hospital_name} ${dueTodayTasks[0].title}`
-      : dueTodayTasks[0]?.hospital_name ||
-        dueTodayTasks[0]?.title ||
-        dueTodayTasks[0]?.description?.slice(0, 20) ||
-        null;
-  const briefingText =
-    totalTasks === 0
-      ? "대표님, 아직 수집된 업무가 없어요."
-      : dueTodayCount > 0 && dueTodayExample
-        ? `대표님, 오늘 ${dueTodayExample} 건 포함 총 ${dueTodayCount}개의 긴급 업무가 있습니다.`
-        : `대표님, 총 ${totalTasks}개의 업무가 있습니다.`;
   const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
   const todayTaskCount = tasks.filter(
     (t) => !isDone(t?.status) && (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
@@ -94,7 +78,6 @@ export default async function DashboardPage() {
           dueTodayCount={dueTodayCount}
           todayScheduleCount={todayScheduleCount}
           totalTasks={totalTasks}
-          briefingText={briefingText}
           hasSupabaseConfig={hasSupabaseConfig}
           supabaseError={supabaseError}
         />

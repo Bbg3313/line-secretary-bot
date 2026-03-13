@@ -9,6 +9,7 @@ import {
   getDateKeyKST,
   getTodayDateKeyKST,
 } from "@/lib/scheduleUtils";
+import { generateBriefingFromTasks } from "@/lib/briefingUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
 import AIBriefing from "@/components/AIBriefing";
@@ -20,8 +21,7 @@ type DashboardContentProps = {
   dueTodayCount: number;
   todayScheduleCount: number;
   totalTasks: number;
-  briefingText: string;
-  hasSupabaseConfig: boolean;
+  hasSupabaseConfig?: boolean;
   supabaseError?: string;
 };
 
@@ -34,33 +34,50 @@ export default function DashboardContent({
   todayTaskCount,
   dueTodayCount,
   todayScheduleCount,
-  briefingText,
 }: DashboardContentProps) {
   const router = useRouter();
   const [filterMode, setFilterMode] = useState<FilterMode>(null);
+  const [quickHospital, setQuickHospital] = useState<string | null>(null);
+  const [quickTaskType, setQuickTaskType] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const todayKey = useMemo(() => getTodayDateKeyKST(), []);
 
+  const uniqueHospitals = useMemo(() => {
+    const set = new Set(tasks.map((t) => (t.hospital_name || "").trim()).filter(Boolean));
+    return Array.from(set).sort();
+  }, [tasks]);
+
+  const uniqueTaskTypes = useMemo(() => {
+    const set = new Set(tasks.map((t) => (t.task_type || "").trim()).filter(Boolean));
+    return Array.from(set).sort();
+  }, [tasks]);
+
   const tasksToShow = useMemo(() => {
-    if (!filterMode) return tasks;
+    let list = tasks;
     if (filterMode === "today_task") {
-      return tasks.filter(
+      list = list.filter(
         (t) =>
           !isDone(t?.status) &&
           (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
       );
-    }
-    if (filterMode === "urgent") {
-      return tasks.filter(
+    } else if (filterMode === "urgent") {
+      list = list.filter(
         (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
       );
+    } else if (filterMode === "today_schedule") {
+      list = list.filter((t) => getDateKeyKST(t?.created_at ?? "") === todayKey);
     }
-    if (filterMode === "today_schedule") {
-      return tasks.filter((t) => getDateKeyKST(t?.created_at ?? "") === todayKey);
+    if (quickHospital) {
+      list = list.filter((t) => (t.hospital_name || "").trim() === quickHospital);
     }
-    return tasks;
-  }, [tasks, filterMode, todayKey]);
+    if (quickTaskType) {
+      list = list.filter((t) => (t.task_type || "").trim() === quickTaskType);
+    }
+    return list;
+  }, [tasks, filterMode, todayKey, quickHospital, quickTaskType]);
+
+  const briefingText = useMemo(() => generateBriefingFromTasks(tasksToShow), [tasksToShow]);
 
   async function handleDeleteAll() {
     if (!confirm("개발용: tasks 테이블 전체 삭제합니다. 계속할까요?")) return;
@@ -103,6 +120,12 @@ export default function DashboardContent({
           tasks={tasksToShow}
           filterMode={filterMode}
           onClearFilter={() => setFilterMode(null)}
+          uniqueHospitals={uniqueHospitals}
+          uniqueTaskTypes={uniqueTaskTypes}
+          quickHospital={quickHospital}
+          quickTaskType={quickTaskType}
+          onQuickHospitalChange={setQuickHospital}
+          onQuickTaskTypeChange={setQuickTaskType}
         />
       </section>
 

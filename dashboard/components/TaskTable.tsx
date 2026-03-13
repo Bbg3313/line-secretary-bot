@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
@@ -61,17 +61,37 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   );
 }
 
+const STATUS_OPTIONS = ["대기", "진행중", "긴급", "완료"] as const;
+
 type TaskTableProps = {
   tasks: TaskRow[];
   filterMode?: "today_task" | "urgent" | "today_schedule" | null;
   onClearFilter?: () => void;
+  uniqueHospitals?: string[];
+  uniqueTaskTypes?: string[];
+  quickHospital?: string | null;
+  quickTaskType?: string | null;
+  onQuickHospitalChange?: (v: string | null) => void;
+  onQuickTaskTypeChange?: (v: string | null) => void;
 };
 
-export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTableProps) {
+export default function TaskTable({
+  tasks,
+  filterMode,
+  onClearFilter,
+  uniqueHospitals = [],
+  uniqueTaskTypes = [],
+  quickHospital = null,
+  quickTaskType = null,
+  onQuickHospitalChange,
+  onQuickTaskTypeChange,
+}: TaskTableProps) {
   const router = useRouter();
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
+  const [editRow, setEditRow] = useState<TaskRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
@@ -89,6 +109,47 @@ export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTabl
       });
       return;
     }
+    router.refresh();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("정말 삭제하시겠습니까?")) return;
+    setDeletingId(id);
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    setDeletingId(null);
+    if (error) {
+      console.error(error);
+      alert("삭제 실패: " + error.message);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function handleSaveEdit(payload: {
+    hospital_name: string;
+    task_type: string;
+    deadline: string | null;
+    status: string;
+    title: string;
+    description: string;
+  }) {
+    if (!editRow) return;
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        hospital_name: payload.hospital_name || "기타",
+        task_type: payload.task_type || "개인",
+        deadline: payload.deadline || null,
+        status: payload.status,
+        title: payload.title,
+        description: payload.description,
+      })
+      .eq("id", editRow.id);
+    if (error) {
+      alert("저장 실패: " + error.message);
+      return;
+    }
+    setEditRow(null);
     router.refresh();
   }
 
@@ -135,8 +196,50 @@ export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTabl
           </span>
         )}
       </div>
+
+      {/* 퀵 필터 바 */}
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-600/60 bg-slate-800/20 px-4 py-3">
+        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">병원</span>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => onQuickHospitalChange?.(null)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+              !quickHospital ? "bg-slate-600 text-white" : "bg-slate-700/60 text-slate-400 hover:bg-slate-600/80 hover:text-slate-200"
+            }`}
+          >
+            전체
+          </button>
+          {uniqueHospitals.map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => onQuickHospitalChange?.(quickHospital === h ? null : h)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                quickHospital === h ? "bg-slate-600 text-white" : "bg-slate-700/60 text-slate-400 hover:bg-slate-600/80 hover:text-slate-200"
+              }`}
+            >
+              {h}
+            </button>
+          ))}
+        </div>
+        <span className="ml-4 border-l border-slate-600/60 pl-4 text-xs font-medium uppercase tracking-wider text-slate-500">업무유형</span>
+        <select
+          value={quickTaskType ?? ""}
+          onChange={(e) => onQuickTaskTypeChange?.(e.target.value ? e.target.value : null)}
+          className="rounded-md border border-slate-600 bg-slate-700/80 px-2.5 py-1 text-xs text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        >
+          <option value="">전체</option>
+          {uniqueTaskTypes.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-slate-600/60 bg-slate-800/30">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[800px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
               <th className="w-12 px-4 py-3.5 font-medium text-slate-400">완료</th>
@@ -145,12 +248,13 @@ export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTabl
               <th className="min-w-[90px] px-4 py-3.5 font-medium text-slate-400">마감기한</th>
               <th className="min-w-[80px] px-4 py-3.5 font-medium text-slate-400">상태</th>
               <th className="px-4 py-3.5 font-medium text-slate-400">내용</th>
+              <th className="w-24 px-4 py-3.5 font-medium text-slate-400">관리</th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
+                <td colSpan={7} className="py-12 text-center text-slate-500">
                   아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 개별 업무로 쪼개져 저장돼요.
                 </td>
               </tr>
@@ -217,6 +321,27 @@ export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTabl
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditRow(row)}
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-600/60 hover:text-slate-200"
+                        title="수정"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(row.id)}
+                        disabled={deletingId === row.id}
+                        className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+                        title="삭제"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
@@ -252,6 +377,144 @@ export default function TaskTable({ tasks, filterMode, onClearFilter }: TaskTabl
           </div>
         </div>
       )}
+
+      {editRow && (
+        <EditTaskModal
+          row={editRow}
+          onSave={handleSaveEdit}
+          onClose={() => setEditRow(null)}
+        />
+      )}
     </section>
+  );
+}
+
+/** 수정 모달: 병원명, 마감기한, 상태, 제목, 내용 편집 후 저장 */
+function EditTaskModal({
+  row,
+  onSave,
+  onClose,
+}: {
+  row: TaskRow;
+  onSave: (p: {
+    hospital_name: string;
+    task_type: string;
+    deadline: string | null;
+    status: string;
+    title: string;
+    description: string;
+  }) => void;
+  onClose: () => void;
+}) {
+  const [hospital_name, setHospitalName] = useState(row.hospital_name?.trim() || "기타");
+  const [task_type, setTaskType] = useState(row.task_type?.trim() || "개인");
+  const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
+  const [status, setStatus] = useState(row.status || "대기");
+  const [title, setTitle] = useState(row.title?.trim() || "");
+  const [description, setDescription] = useState(row.description?.trim() || "");
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onSave({
+      hospital_name: hospital_name.trim() || "기타",
+      task_type: task_type.trim() || "개인",
+      deadline: deadline.trim() || null,
+      status,
+      title: title.trim() || description.slice(0, 50),
+      description: description.trim() || title.trim() || "업무",
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="업무 수정"
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-800 p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 text-lg font-semibold text-white">업무 수정</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">병원명</label>
+            <input
+              type="text"
+              value={hospital_name}
+              onChange={(e) => setHospitalName(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">업무유형</label>
+            <input
+              type="text"
+              value={task_type}
+              onChange={(e) => setTaskType(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">마감기한</label>
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">상태</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">제목</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">내용</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              저장
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
