@@ -45,16 +45,16 @@ export default async function DashboardPage() {
   const todayKey = getTodayDateKeyKST();
 
   const totalTasks = tasks.length;
-  const dueTodayCount = tasks.filter((t) => t.status !== "완료" && isDeadlineTodayKST(t.deadline)).length;
+  const dueTodayCount = tasks.filter((t) => t?.status !== "완료" && t?.status !== "done" && isDeadlineTodayKST(t?.deadline ?? null)).length;
   const dueTodayExample =
-    tasks.find((t) => isDeadlineTodayKST(t.deadline))?.hospital_name ||
-    tasks.find((t) => isDeadlineTodayKST(t.deadline))?.title ||
-    tasks.find((t) => isDeadlineTodayKST(t.deadline))?.description ||
+    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.hospital_name ||
+    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.title ||
+    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.description ||
     null;
   const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
-  const isDone = (s: string) => s === "완료" || s === "done";
+  const isDone = (s: string | undefined) => s === "완료" || s === "done";
   const todayTaskCount = tasks.filter(
-    (t) => !isDone(t.status) && (isDeadlineTodayKST(t.deadline) || getDateKeyKST(t.created_at) === todayKey)
+    (t) => !isDone(t?.status) && (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
   ).length;
 
   return (

@@ -107,9 +107,9 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                     <label className="flex cursor-pointer items-center justify-center">
                       <input
                         type="checkbox"
-                        checked={isDone(row.status)}
+                        checked={isDone(row.status ?? "")}
                         disabled={togglingId === row.id}
-                        onChange={() => toggleDone(row.id, row.status)}
+                        onChange={() => toggleDone(row.id, row.status ?? "대기")}
                         className="h-5 w-5 cursor-pointer rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
                       />
                     </label>
@@ -125,15 +125,15 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(row.status)}`}
+                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(row.status ?? "대기")}`}
                     >
-                      {statusLabel(row.status)}
+                      {statusLabel(row.status ?? "대기")}
                     </span>
                   </td>
                   <td className="max-w-[360px] px-4 py-3 text-slate-200">
                     <div className="block break-words">
                       <span
-                        className={isDone(row.status) ? "line-through opacity-80" : "font-medium"}
+                        className={isDone(row.status ?? "") ? "line-through opacity-80" : "font-medium"}
                         title={row.description || row.title || undefined}
                       >
                         {truncateContent(displayContent(row), 60)}
