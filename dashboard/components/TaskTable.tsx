@@ -49,13 +49,25 @@ function truncateContent(text: string, maxLen = 80): string {
 export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
   const router = useRouter();
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+
+  const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
   async function toggleDone(id: string, current: string) {
-    setTogglingId(id);
     const next = isDone(current) ? "대기" : "완료";
+    setTogglingId(id);
+    setLocalStatus((prev) => ({ ...prev, [id]: next }));
     const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
     setTogglingId(null);
-    if (!error) router.refresh();
+    if (error) {
+      setLocalStatus((prev) => {
+        const u = { ...prev };
+        delete u[id];
+        return u;
+      });
+      return;
+    }
+    router.refresh();
   }
 
   const sorted = [...tasks].sort((a, b) => {
@@ -100,43 +112,61 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(row.status) ? "opacity-75" : ""
+                    isDone(getStatus(row)) ? "opacity-75" : ""
                   }`}
                 >
-                  <td className="px-4 py-3">
-                    <label className="flex cursor-pointer items-center justify-center">
+                  <td
+                    className="cursor-pointer px-4 py-3 align-middle"
+                    onClick={() => {
+                      if (togglingId === row.id) return;
+                      toggleDone(row.id, getStatus(row));
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (togglingId !== row.id) toggleDone(row.id, getStatus(row));
+                      }
+                    }}
+                  >
+                    <span className="inline-flex items-center justify-center">
                       <input
                         type="checkbox"
-                        checked={isDone(row.status ?? "")}
+                        checked={isDone(getStatus(row))}
                         disabled={togglingId === row.id}
-                        onChange={() => toggleDone(row.id, row.status ?? "대기")}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleDone(row.id, getStatus(row));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
                         className="h-5 w-5 cursor-pointer rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
                       />
-                    </label>
+                    </span>
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-200">
-                    {row.hospital_name || "—"}
+                    {row.hospital_name?.trim() || "—"}
                   </td>
                   <td className="px-4 py-3 text-slate-300">
-                    {row.task_type || "—"}
+                    {row.task_type?.trim() || "—"}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-300">
                     {formatDeadline(row.deadline)}
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(row.status ?? "대기")}`}
+                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(getStatus(row))}`}
                     >
-                      {statusLabel(row.status ?? "대기")}
+                      {statusLabel(getStatus(row))}
                     </span>
                   </td>
                   <td className="max-w-[360px] px-4 py-3 text-slate-200">
                     <div className="block break-words">
                       <span
-                        className={isDone(row.status ?? "") ? "line-through opacity-80" : "font-medium"}
+                        className={isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}
                         title={row.description || row.title || undefined}
                       >
-                        {truncateContent(displayContent(row), 60)}
+                        {truncateContent(displayContent(row), 80)}
                       </span>
                       {displaySub(row) && (
                         <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">
