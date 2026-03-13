@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
@@ -28,12 +29,23 @@ function isDone(s: string): boolean {
   return s === "완료" || s === "done";
 }
 
+/** 내용 80자까지 보여주고 나머지는 말줄임 */
+function truncateContent(text: string, maxLen = 80): string {
+  if (!text) return "—";
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return t.slice(0, maxLen) + "…";
+}
+
 export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
   const router = useRouter();
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   async function toggleDone(id: string, current: string) {
+    setTogglingId(id);
     const next = isDone(current) ? "대기" : "완료";
     const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
+    setTogglingId(null);
     if (!error) router.refresh();
   }
 
@@ -82,12 +94,15 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                   }`}
                 >
                   <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={isDone(row.status)}
-                      onChange={() => toggleDone(row.id, row.status)}
-                      className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
-                    />
+                    <label className="flex cursor-pointer items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isDone(row.status)}
+                        disabled={togglingId === row.id}
+                        onChange={() => toggleDone(row.id, row.status)}
+                        className="h-5 w-5 cursor-pointer rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
+                      />
+                    </label>
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-200">
                     {row.hospital_name || "—"}
@@ -111,9 +126,12 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                       {statusLabel(row.status)}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-200">
-                    <span className={isDone(row.status) ? "line-through opacity-80" : ""}>
-                      {displayContent(row)}
+                  <td className="max-w-[320px] px-4 py-2.5 text-slate-200">
+                    <span
+                      className={`block break-words ${isDone(row.status) ? "line-through opacity-80" : ""}`}
+                      title={displayContent(row)}
+                    >
+                      {truncateContent(displayContent(row))}
                     </span>
                   </td>
                 </tr>
