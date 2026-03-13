@@ -59,6 +59,7 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
 }
 
 const STATUS_OPTIONS = ["대기", "진행중", "긴급", "완료"] as const;
+const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 
 type TaskTableProps = {
   tasks: TaskRow[];
@@ -89,12 +90,19 @@ export default function TaskTable({
 }: TaskTableProps) {
   const router = useRouter();
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+  const [localAssignee, setLocalAssignee] = useState<Record<string, string>>({});
+  const [dispatched, setDispatched] = useState<Record<string, boolean>>({});
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"대기" | "진행중" | "완료" | "긴급" | null>(null);
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
+  const getAssignee = (row: TaskRow) =>
+    localAssignee[row.id] ??
+    // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
+    (row.assignee as string | null | undefined) ??
+    "미정";
 
   async function updateStatus(id: string, next: string) {
     setLocalStatus((prev) => ({ ...prev, [id]: next }));
@@ -129,6 +137,7 @@ export default function TaskTable({
     hospital_name: string;
     task_type: string;
     deadline: string | null;
+    assignee?: string;
     status: string;
     title: string;
     description: string;
@@ -140,6 +149,8 @@ export default function TaskTable({
         hospital_name: payload.hospital_name || "기타",
         task_type: payload.task_type || "개인",
         deadline: payload.deadline || null,
+        // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
+        assignee: payload.assignee ?? getAssignee(editRow),
         status: payload.status,
         title: payload.title,
         description: payload.description,
@@ -292,11 +303,12 @@ export default function TaskTable({
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-slate-600/60 bg-slate-800/30 scrollbar-thin">
-        <table className="w-full min-w-[800px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
               <th className="min-w-[100px] px-4 py-4 font-medium text-slate-400">병원명</th>
               <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">업무유형</th>
+              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">담당자</th>
               <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">마감기한</th>
               <th className="min-w-[80px] px-4 py-4 font-medium text-slate-400">상태</th>
               <th className="px-4 py-4 font-medium text-slate-400">내용</th>
@@ -306,7 +318,7 @@ export default function TaskTable({
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center">
+                <td colSpan={7} className="py-12 text-center">
                   {totalTaskCount > 0 ? (
                     <div className="text-slate-400">
                       <p className="font-medium">필터 조건에 맞는 업무가 없어요.</p>
@@ -333,7 +345,11 @@ export default function TaskTable({
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(getStatus(row)) ? "opacity-50 bg-slate-800/40 [&_td]:line-through" : ""
+                    isDone(getStatus(row))
+                      ? "opacity-50 bg-slate-800/40 [&_td]:line-through"
+                      : dispatched[row.id]
+                        ? "bg-slate-800/60"
+                        : ""
                   }`}
                 >
                   <td className="px-4 py-4 font-medium text-slate-200">
@@ -341,6 +357,35 @@ export default function TaskTable({
                   </td>
                   <td className="px-4 py-4 text-slate-300">
                     {row.task_type?.trim() || "개인"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <select
+                      value={getAssignee(row)}
+                      onChange={async (e) => {
+                        const next = e.target.value;
+                        setLocalAssignee((prev) => ({ ...prev, [row.id]: next }));
+                        // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
+                        const { error } = await supabase.from("tasks").update({ assignee: next }).eq("id", row.id);
+                        if (error) {
+                          console.error(error);
+                          alert("담당자 변경 실패: " + error.message);
+                          setLocalAssignee((prev) => {
+                            const u = { ...prev };
+                            delete u[row.id];
+                            return u;
+                          });
+                          return;
+                        }
+                        router.refresh();
+                      }}
+                      className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    >
+                      {ASSIGNEE_OPTIONS.map((a) => (
+                        <option key={a} value={a} className="bg-slate-800 text-slate-100">
+                          {a}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-4">
                     <DeadlineCell deadline={row.deadline} />
@@ -369,7 +414,32 @@ export default function TaskTable({
                     </button>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (dispatched[row.id]) return;
+                          const assignee = getAssignee(row);
+                          const confirmed = confirm(
+                            `담당자 [${assignee}]에게 업무를 지시하시겠습니까?`,
+                          );
+                          if (!confirmed) return;
+                          setDispatched((prev) => ({ ...prev, [row.id]: true }));
+                          // 상태가 대기라면 진행중으로 자동 전환
+                          if (statusLabel(getStatus(row)) === "대기") {
+                            await updateStatus(row.id, "진행중");
+                          }
+                        }}
+                        disabled={dispatched[row.id]}
+                        className={`mr-1 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition ${
+                          dispatched[row.id]
+                            ? "bg-slate-700/80 text-slate-400 cursor-default"
+                            : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                        }`}
+                      >
+                        <span aria-hidden>🚀</span>
+                        {dispatched[row.id] ? "지시 완료" : "지시하기"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}
@@ -447,6 +517,7 @@ function EditTaskModal({
     hospital_name: string;
     task_type: string;
     deadline: string | null;
+    assignee?: string;
     status: string;
     title: string;
     description: string;
@@ -456,6 +527,8 @@ function EditTaskModal({
   const [hospital_name, setHospitalName] = useState(row.hospital_name?.trim() || "기타");
   const [task_type, setTaskType] = useState(row.task_type?.trim() || "개인");
   const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
+  // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
+  const [assignee, setAssignee] = useState<string>((row.assignee as string | null | undefined) || "미정");
   const [status, setStatus] = useState(row.status || "대기");
   const [title, setTitle] = useState(row.title?.trim() || "");
   const [description, setDescription] = useState(row.description?.trim() || "");
@@ -466,6 +539,7 @@ function EditTaskModal({
       hospital_name: hospital_name.trim() || "기타",
       task_type: task_type.trim() || "개인",
       deadline: deadline.trim() || null,
+      assignee: assignee.trim() || "미정",
       status,
       title: title.trim() || description.slice(0, 50),
       description: description.trim() || title.trim() || "업무",
@@ -503,6 +577,20 @@ function EditTaskModal({
               onChange={(e) => setTaskType(e.target.value)}
               className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">담당자</label>
+            <select
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            >
+              {ASSIGNEE_OPTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">마감기한</label>
