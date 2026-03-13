@@ -217,6 +217,44 @@ def save_to_supabase(
     return None
 
 
+def _tasks_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+
+
+def insert_one_task_row(
+    *,
+    chat_id: str | None,
+    line_user_id: str | None,
+    line_group_id: str | None,
+    source_message: str,
+    description: str,
+) -> None:
+    """tasks 테이블에 정확히 1건만 삽입 (메시지당 최소 1건 보장용). 실패 시 예외."""
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
+    desc = (description or source_message or "업무 내용")[:500].strip() or "업무 내용"
+    row = {
+        "chat_id": chat_id,
+        "line_user_id": line_user_id,
+        "line_group_id": line_group_id,
+        "source_message": source_message,
+        "description": desc,
+        "hospital_name": None,
+        "task_type": None,
+        "status": "대기",
+        "deadline": None,
+    }
+    resp = requests.post(url, headers=_tasks_headers(), json=row, timeout=15)
+    if resp.status_code >= 400:
+        print(f"[tasks 1건 insert 실패] {resp.status_code} {resp.text}", flush=True)
+        raise RuntimeError(f"tasks insert failed: {resp.status_code} {resp.text[:300]}")
+    print(f"[tasks] 1건 insert 성공", flush=True)
+
+
 def save_tasks_to_supabase(
     *,
     chat_id: str | None,
@@ -226,17 +264,17 @@ def save_tasks_to_supabase(
     tasks: list[dict],
 ) -> None:
     """Supabase tasks 테이블에 업무 단위로 행 삽입 (병원명, 업무유형, 마감, 내용, 상태 대기)."""
-    if not tasks:
-        return
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/tasks"
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-    }
+
+    def insert_one(row: dict) -> None:
+        resp = requests.post(url, headers=_tasks_headers(), json=row, timeout=15)
+        if resp.status_code >= 400:
+            print(f"[tasks insert 실패] {resp.status_code} {resp.text}", flush=True)
+            raise RuntimeError(f"tasks insert failed: {resp.status_code} {resp.text[:200]}")
+
+    inserted = 0
     for t in tasks:
-        desc = (t.get("description") or "").strip()
+        desc = (t.get("description") or t.get("title") or "").strip()
         if not desc:
             continue
         deadline = t.get("deadline") or None
@@ -253,9 +291,8 @@ def save_tasks_to_supabase(
             "status": "대기",
             "deadline": deadline,
         }
-        resp = requests.post(url, headers=headers, json=row, timeout=15)
-        if resp.status_code >= 400:
-            print(f"[tasks insert 경고] {resp.status_code} {resp.text}")
+        insert_one(row)
+        inserted += 1
 
 
 def reply_to_line(reply_token: str, text: str) -> None:
@@ -444,6 +481,12 @@ def handle_message(event: MessageEvent):
 
     # 일반 메시지: Gemini 원자화 분석 → chats + tasks 저장 → 답장
     summary, tasks = analyze_and_extract(text)
+    # 실제로 넣을 수 있는 게 하나도 없으면(비어 있거나 description 다 비어 있음) 최소 1건 fallback
+    has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False
+    if not has_valid:
+        fallback_desc = (summary[:500] if summary and not summary.startswith("(Gemini") else text[:500].strip()) or "업무 내용"
+        tasks = [{"description": fallback_desc, "hospital_name": None, "task_type": None, "deadline": None}]
+        print(f"[저장] tasks 유효한 항목 없어서 1건 fallback 저장")
     try:
         chat_id = save_to_supabase(
             line_user_id=user_id,
@@ -451,6 +494,15 @@ def handle_message(event: MessageEvent):
             raw_message=text,
             gemini_analysis=summary,
         )
+        # 메시지당 tasks에 무조건 1건 먼저 넣기 (chats만 차고 tasks 비는 현상 방지)
+        insert_one_task_row(
+            chat_id=chat_id,
+            line_user_id=user_id,
+            line_group_id=group_id,
+            source_message=text,
+            description=text[:500].strip() or summary[:200] if summary else "업무",
+        )
+        # Gemini에서 뽑은 추가 업무가 있으면 더 넣기
         save_tasks_to_supabase(
             chat_id=chat_id,
             line_user_id=user_id,
@@ -458,16 +510,18 @@ def handle_message(event: MessageEvent):
             source_message=text,
             tasks=tasks,
         )
-        print(f"[저장] user={user_id}, group={group_id}, summary={summary[:50]}..., tasks={len(tasks)}건")
+        print(f"[저장] user={user_id}, group={group_id}, chats+tasks 1건 필수, 추가 {len(tasks)}건")
         reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
-        print(f"[저장 실패] user={user_id}, group={group_id}, err={e}")
+        import traceback
+        print(f"[저장 실패] user={user_id}, group={group_id}, err={e}", flush=True)
+        traceback.print_exc()
         reply_to_line(event.reply_token, "저장 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
 
 
 @app.post("/debug/insert")
 async def debug_insert():
-    """Supabase 연결 확인용: 테스트 데이터 1건 삽입."""
+    """Supabase 연결 확인용: 테스트 데이터 1건 삽입 (chats + tasks 1건 필수)."""
     text = "Clyve 의원 리포트 마감 내일, 삼성 병원 미팅 다음 주 수요일"
     summary, tasks = analyze_and_extract(text)
     chat_id = save_to_supabase(
@@ -476,8 +530,9 @@ async def debug_insert():
         raw_message=text,
         gemini_analysis=summary,
     )
+    insert_one_task_row(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, description=text)
     save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, tasks=tasks)
-    return {"status": "ok", "summary": summary, "tasks_count": len(tasks)}
+    return {"status": "ok", "summary": summary, "tasks_count": 1 + len(tasks)}
 
 
 @app.get("/debug/gemini-models")

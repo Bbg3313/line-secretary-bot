@@ -3,6 +3,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
+/** Vercel에 환경 변수를 넣었는지 확인용. false면 대시보드에 안내 배너 표시 */
+export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+/** 디버그용: 연결된 Supabase URL 앞부분 (어떤 프로젝트인지 확인) */
+export const supabaseUrlPrefix = supabaseUrl ? `${supabaseUrl.slice(0, 40)}...` : "";
+
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 export type ChatRow = {

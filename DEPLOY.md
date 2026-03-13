@@ -24,16 +24,31 @@
 
 - **Root Directory**
   - **Edit** 클릭 → `dashboard` 입력 → **Continue**
-- **Environment Variables** (필수)
+- **Environment Variables** (필수 — 안 넣으면 대시보드에 데이터가 안 보임)
   - Name: `NEXT_PUBLIC_SUPABASE_URL`  
     Value: Supabase 대시보드 → Project Settings → API → **Project URL**
   - Name: `NEXT_PUBLIC_SUPABASE_ANON_KEY`  
-    Value: Supabase **anon key** (publishable key)
+    Value: Supabase **anon key** (Project Settings → API → anon public)
 
-## 4. 배포
+## 4. Supabase RLS 정책 (필수 — 안 하면 대시보드에 데이터 0건)
+
+- Supabase 대시보드 → **SQL Editor** → **New query**
+- 프로젝트 루트의 `supabase_rls_policies.sql` 내용 전체 복사 후 붙여넣기 → **Run**
+- 이렇게 해야 Vercel 대시보드(anon 키)가 `chats` / `tasks` 테이블을 조회·수정할 수 있습니다.
+
+## 5. 배포
 
 - **Deploy** 클릭
-- 끝나면 **Visit** 또는 배포 URL로 접속해서 대시보드 확인
+- 끝나면 **Visit** 또는 배포 URL로 접속 → Supabase에 쌓인 업무/채팅이 보여야 합니다. 안 보이면 위 3번(환경 변수), 4번(RLS 정책)을 다시 확인한 뒤 Vercel에서 **Redeploy** 하세요.
+
+### 대시보드에 chats는 보이는데 tasks만 0건일 때
+
+1. **같은 Supabase 프로젝트인지 확인**  
+   - Vercel 대시보드 페이지 맨 아래 "디버그"에 나온 **연결 URL**과, Render의 환경 변수 **SUPABASE_URL**이 **완전히 동일한** 프로젝트인지 확인하세요. (다르면 Render는 A에 저장하고, 대시보드는 B를 보고 있는 것.)
+2. **Supabase Table Editor**  
+   - 해당 프로젝트 → **Table Editor** → **tasks** 테이블을 열어서 실제로 행이 있는지 확인하세요. 없으면 백엔드(Render)가 이 프로젝트에 tasks를 안 넣고 있는 것이므로 Render의 SUPABASE_URL/SUPABASE_KEY를 확인하세요.
+3. **RLS**  
+   - `supabase_rls_policies.sql`을 그 프로젝트에서 한 번 더 실행해 보세요.
 
 ---
 
