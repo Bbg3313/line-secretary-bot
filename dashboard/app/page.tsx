@@ -2,9 +2,7 @@ import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { getScheduleChats } from "@/lib/classify";
 import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST } from "@/lib/scheduleUtils";
-import SummaryCards from "@/components/SummaryCards";
-import AIBriefing from "@/components/AIBriefing";
-import TaskTable from "@/components/TaskTable";
+import DashboardContent from "@/components/DashboardContent";
 
 export const revalidate = 60;
 
@@ -45,14 +43,27 @@ export default async function DashboardPage() {
   const todayKey = getTodayDateKeyKST();
 
   const totalTasks = tasks.length;
-  const dueTodayCount = tasks.filter((t) => t?.status !== "완료" && t?.status !== "done" && isDeadlineTodayKST(t?.deadline ?? null)).length;
-  const dueTodayExample =
-    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.hospital_name ||
-    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.title ||
-    tasks.find((t) => isDeadlineTodayKST(t?.deadline ?? null))?.description ||
-    null;
-  const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
   const isDone = (s: string | undefined) => s === "완료" || s === "done";
+  const dueTodayCount = tasks.filter(
+    (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
+  ).length;
+  const dueTodayTasks = tasks.filter(
+    (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
+  );
+  const dueTodayExample =
+    dueTodayTasks[0]?.hospital_name && dueTodayTasks[0]?.title
+      ? `${dueTodayTasks[0].hospital_name} ${dueTodayTasks[0].title}`
+      : dueTodayTasks[0]?.hospital_name ||
+        dueTodayTasks[0]?.title ||
+        dueTodayTasks[0]?.description?.slice(0, 20) ||
+        null;
+  const briefingText =
+    totalTasks === 0
+      ? "대표님, 아직 수집된 업무가 없어요."
+      : dueTodayCount > 0 && dueTodayExample
+        ? `대표님, 오늘 ${dueTodayExample} 건 포함 총 ${dueTodayCount}개의 긴급 업무가 있습니다.`
+        : `대표님, 총 ${totalTasks}개의 업무가 있습니다.`;
+  const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
   const todayTaskCount = tasks.filter(
     (t) => !isDone(t?.status) && (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
   ).length;
@@ -76,26 +87,18 @@ export default async function DashboardPage() {
           </p>
         </section>
       )}
-      <section>
-        <SummaryCards
+      {hasSupabaseConfig && (
+        <DashboardContent
+          tasks={tasks}
           todayTaskCount={todayTaskCount}
-          urgentCount={dueTodayCount}
-          todayScheduleCount={todayScheduleCount}
-        />
-      </section>
-
-      <section>
-        <AIBriefing
-          totalTasks={totalTasks}
           dueTodayCount={dueTodayCount}
-          dueTodayExample={dueTodayExample}
+          todayScheduleCount={todayScheduleCount}
+          totalTasks={totalTasks}
+          briefingText={briefingText}
+          hasSupabaseConfig={hasSupabaseConfig}
+          supabaseError={supabaseError}
         />
-      </section>
-
-      <section>
-        <TaskTable tasks={tasks} />
-      </section>
-
+      )}
     </main>
   );
 }

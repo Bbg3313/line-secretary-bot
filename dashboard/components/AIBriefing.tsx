@@ -1,17 +1,9 @@
 type AIBriefingProps = {
-  totalTasks: number;
-  dueTodayCount: number;
-  dueTodayExample?: string | null;
+  /** AI 비서 한마디 전체 문장 (예: "대표님, 오늘 마이셀 예산 증액 건 포함 총 5개의 긴급 업무가 있습니다.") */
+  text: string;
 };
 
-export default function AIBriefing({ totalTasks, dueTodayCount, dueTodayExample }: AIBriefingProps) {
-  const line =
-    totalTasks === 0
-      ? "대표님, 아직 수집된 업무가 없어요."
-      : dueTodayCount > 0 && dueTodayExample
-        ? `대표님, 오늘 마감인 ${dueTodayExample} 포함 총 ${totalTasks}개의 업무가 있습니다.`
-        : `대표님, 총 ${totalTasks}개의 업무가 있습니다.`;
-
+export default function AIBriefing({ text }: AIBriefingProps) {
   return (
     <section className="rounded-xl border border-slate-600/80 bg-slate-800/30 p-5 shadow-lg">
       <div className="flex items-center gap-3">
@@ -19,7 +11,7 @@ export default function AIBriefing({ totalTasks, dueTodayCount, dueTodayExample 
           ✨
         </div>
         <p className="text-base font-medium leading-snug text-slate-200">
-          {line}
+          {text}
         </p>
       </div>
     </section>

@@ -21,3 +21,7 @@ create policy "Allow anon insert tasks"
 drop policy if exists "Allow anon update tasks" on public.tasks;
 create policy "Allow anon update tasks"
   on public.tasks for update to anon using (true) with check (true);
+-- 개발/테스트용: 전체 삭제 버튼 사용 시 필요
+drop policy if exists "Allow anon delete tasks" on public.tasks;
+create policy "Allow anon delete tasks"
+  on public.tasks for delete to anon using (true);

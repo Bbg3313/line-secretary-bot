@@ -30,12 +30,12 @@ function isDone(s: string): boolean {
   return s === "완료" || s === "done";
 }
 
-/** 상태별 뱃지 스타일: 대기=파랑, 진행중=노랑, 긴급=빨강, 완료=초록 */
+/** 상태별 뱃지 스타일: 눈에 띄게 구분 (대기=파랑, 진행중=노랑, 긴급=빨강, 완료=초록) */
 function statusBadgeClass(s: string): string {
-  if (isDone(s)) return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
-  if (s === "진행중" || s === "in_progress") return "bg-amber-500/20 text-amber-300 border-amber-500/40";
-  if (s === "긴급") return "bg-red-500/20 text-red-300 border-red-500/40";
-  return "bg-blue-500/20 text-blue-300 border-blue-500/40";
+  if (isDone(s)) return "bg-emerald-600/30 text-emerald-200 border border-emerald-500/60 font-semibold";
+  if (s === "진행중" || s === "in_progress") return "bg-amber-500/30 text-amber-200 border border-amber-500/60 font-semibold";
+  if (s === "긴급") return "bg-red-600/30 text-red-200 border border-red-500/60 font-semibold";
+  return "bg-blue-600/30 text-blue-200 border border-blue-500/60 font-semibold";
 }
 
 /** 내용 maxLen자까지만 보여주고 나머지는 말줄임 */
@@ -48,26 +48,17 @@ function truncateContent(text: string, maxLen = 80): string {
 
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
-/** 문장 앞쪽 허수어 제거 후 핵심만 */
-const FILLER = /^(이번\s*주|이번주|다음\s*주|해야\s*할|하고\s*|있습니다|합니다|해\s*요|돼\s*|\.\.\.)\s*/gi;
+type TaskTableProps = {
+  tasks: TaskRow[];
+  filterTodayActive?: boolean;
+  onClearTodayFilter?: () => void;
+};
 
-/** 내용 컬럼: 핵심 키워드만 20자 이내로 압축해 표시 (잘라내기 말고 워딩 압축) */
-function contentSummary(row: TaskRow): string {
-  let raw = (row.title || row.description || "").trim();
-  raw = raw.replace(GENERIC_PHRASE, "").trim();
-  if (!raw) {
-    const desc = (row.description || "").replace(GENERIC_PHRASE, "").trim();
-    raw = desc.replace(FILLER, "").trim();
-  }
-  if (!raw) return "—";
-  const one = raw.length <= 20 ? raw : raw.slice(0, 20) + "…";
-  return one.trim() || "—";
-}
-
-export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
+export default function TaskTable({ tasks, filterTodayActive, onClearTodayFilter }: TaskTableProps) {
   const router = useRouter();
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+  const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
@@ -98,12 +89,27 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
   });
 
 
+  const displayContent = (row: TaskRow) => (row.title || row.description || "").trim() || "—";
+  const truncatedContent = (row: TaskRow) => {
+    let full = displayContent(row);
+    if (!full || full === "—") return "—";
+    full = full.replace(GENERIC_PHRASE, "").trim() || full;
+    return full.length <= 40 ? full : full.slice(0, 40) + "…";
+  };
+
   return (
     <section className="rounded-xl border border-slate-600/80 bg-[#1e293b] p-6 shadow-xl">
-      <h2 className="mb-5 flex items-center gap-2 text-xl font-semibold text-white">
-        <span className="text-2xl" aria-hidden>📋</span>
-        업무 관리
-      </h2>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+          <span className="text-2xl" aria-hidden>📋</span>
+          업무 관리
+        </h2>
+        {filterTodayActive && onClearTodayFilter && (
+          <span className="rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300">
+            오늘 마감만 표시 중 <button type="button" className="ml-1 font-medium underline hover:no-underline" onClick={onClearTodayFilter}>해제</button>
+          </span>
+        )}
+      </div>
       <div className="overflow-x-auto rounded-lg border border-slate-600/60 bg-slate-800/30">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
@@ -128,7 +134,7 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                 <tr
                   key={row.id}
                   className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(getStatus(row)) ? "opacity-75" : ""
+                    isDone(getStatus(row)) ? "opacity-60 bg-slate-800/40" : ""
                   }`}
                 >
                   <td
@@ -176,12 +182,15 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[200px] px-4 py-3 text-slate-200" title={row.description || row.title || undefined}>
-                    <span
-                      className={isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}
+                  <td className="max-w-[220px] px-4 py-3 text-slate-200">
+                    <button
+                      type="button"
+                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "line-through opacity-80" : "font-medium"}`}
+                      onClick={() => setContentPopup({ title: row.title || "—", description: row.description || "—" })}
+                      title="전체 내용 보기"
                     >
-                      {contentSummary(row)}
-                    </span>
+                      <span className="block truncate">{truncatedContent(row)}</span>
+                    </button>
                   </td>
                 </tr>
               ))
@@ -189,6 +198,35 @@ export default function TaskTable({ tasks }: { tasks: TaskRow[] }) {
           </tbody>
         </table>
       </div>
+
+      {contentPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setContentPopup(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="전체 내용"
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-xl border border-slate-600 bg-slate-800 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 text-sm font-medium text-slate-400">제목</div>
+            <p className="mb-4 text-slate-200">{contentPopup.title}</p>
+            <div className="mb-2 text-sm font-medium text-slate-400">내용</div>
+            <p className="whitespace-pre-wrap text-slate-200">{contentPopup.description}</p>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="rounded bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500"
+                onClick={() => setContentPopup(null)}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
