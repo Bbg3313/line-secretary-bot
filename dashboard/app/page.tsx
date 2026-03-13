@@ -1,7 +1,7 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { getScheduleChats } from "@/lib/classify";
-import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST } from "@/lib/scheduleUtils";
+import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST, isDeadlineTodayOrPastKST } from "@/lib/scheduleUtils";
 import DashboardContent from "@/components/DashboardContent";
 
 export const revalidate = 60;
@@ -47,9 +47,10 @@ export default async function DashboardPage() {
   const dueTodayCount = tasks.filter(
     (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
   ).length;
-  const todayScheduleCount = scheduleChats.filter((c) => getDateKeyKST(c.created_at) === todayKey).length;
-  const todayTaskCount = tasks.filter(
-    (t) => !isDone(t?.status) && (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
+  const todayTaskCount = tasks.filter((t) => isDeadlineTodayOrPastKST(t?.deadline ?? null)).length;
+  const todayScheduleCount = tasks.filter(
+    (t) =>
+      isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey
   ).length;
 
   return (

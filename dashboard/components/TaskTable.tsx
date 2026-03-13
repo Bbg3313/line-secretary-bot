@@ -21,12 +21,12 @@ function isDone(s: string): boolean {
   return s === "완료" || s === "done";
 }
 
-/** 상태별 뱃지 스타일: 눈에 띄게 구분 (대기=파랑, 진행중=노랑, 긴급=빨강, 완료=초록) */
+/** 상태 뱃지 컬러: 대기=연한파랑, 진행중=주황(Warning), 완료=초록(Success), 긴급=빨강(Danger) */
 function statusBadgeClass(s: string): string {
-  if (isDone(s)) return "bg-emerald-600/30 text-emerald-200 border border-emerald-500/60 font-semibold";
-  if (s === "진행중" || s === "in_progress") return "bg-amber-500/30 text-amber-200 border border-amber-500/60 font-semibold";
-  if (s === "긴급") return "bg-red-600/30 text-red-200 border border-red-500/60 font-semibold";
-  return "bg-blue-600/30 text-blue-200 border border-blue-500/60 font-semibold";
+  if (isDone(s)) return "bg-emerald-600/25 text-emerald-200 border border-emerald-500/50 font-medium";
+  if (s === "진행중" || s === "in_progress") return "bg-amber-500/30 text-amber-200 border border-amber-500/50 font-medium";
+  if (s === "긴급") return "bg-red-600/30 text-red-200 border border-red-500/50 font-medium";
+  return "bg-slate-500/20 text-slate-300 border border-slate-500/40 font-medium";
 }
 
 /** 내용 maxLen자까지만 보여주고 나머지는 말줄임 */
@@ -242,13 +242,13 @@ export default function TaskTable({
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-600/80 bg-slate-700/40">
-              <th className="w-12 px-4 py-3.5 font-medium text-slate-400">완료</th>
-              <th className="min-w-[100px] px-4 py-3.5 font-medium text-slate-400">병원명</th>
-              <th className="min-w-[90px] px-4 py-3.5 font-medium text-slate-400">업무유형</th>
-              <th className="min-w-[90px] px-4 py-3.5 font-medium text-slate-400">마감기한</th>
-              <th className="min-w-[80px] px-4 py-3.5 font-medium text-slate-400">상태</th>
-              <th className="px-4 py-3.5 font-medium text-slate-400">내용</th>
-              <th className="w-24 px-4 py-3.5 font-medium text-slate-400">관리</th>
+              <th className="w-12 px-4 py-4 font-medium text-slate-400">완료</th>
+              <th className="min-w-[100px] px-4 py-4 font-medium text-slate-400">병원명</th>
+              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">업무유형</th>
+              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">마감기한</th>
+              <th className="min-w-[80px] px-4 py-4 font-medium text-slate-400">상태</th>
+              <th className="px-4 py-4 font-medium text-slate-400">내용</th>
+              <th className="w-24 px-4 py-4 font-medium text-slate-400">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -267,7 +267,7 @@ export default function TaskTable({
                   }`}
                 >
                   <td
-                    className="cursor-pointer px-4 py-3 align-middle"
+                    className="cursor-pointer px-4 py-4 align-middle"
                     onClick={() => {
                       if (togglingId === row.id) return;
                       toggleDone(row.id, getStatus(row));
@@ -295,23 +295,23 @@ export default function TaskTable({
                       />
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-200">
+                  <td className="px-4 py-4 font-medium text-slate-200">
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-4 text-slate-300">
                     {row.task_type?.trim() || "개인"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <DeadlineCell deadline={row.deadline} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <span
                       className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(getStatus(row))}`}
                     >
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[220px] px-4 py-3 text-slate-200">
+                  <td className="max-w-[220px] px-4 py-4 text-slate-200">
                     <button
                       type="button"
                       className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "opacity-80" : "font-medium"}`}
@@ -321,12 +321,12 @@ export default function TaskTable({
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-600/60 hover:text-slate-200"
+                        className="rounded p-1.5 text-slate-400 transition-colors duration-150 hover:bg-slate-600/60 hover:text-emerald-300"
                         title="수정"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -335,7 +335,7 @@ export default function TaskTable({
                         type="button"
                         onClick={() => handleDelete(row.id)}
                         disabled={deletingId === row.id}
-                        className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+                        className="rounded p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-500/25 hover:text-red-400 disabled:opacity-50"
                         title="삭제"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

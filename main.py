@@ -118,7 +118,7 @@ def _normalize_hospital(name: str | None) -> str:
 # 원자화: 메시지에서 업무만 추출. JSON은 반드시 tasks 배열만 포함 (요약문/설명 없이 Task 데이터만)
 GEMINI_EXTRACT_PROMPT = """당신은 업무 추출 API입니다. 출력은 반드시 아래 형식의 JSON 하나만 하세요. 설명·마크다운·코드블록·줄바꿈 요약문 금지.
 
-오늘 날짜: {today_ymd}
+오늘 날짜: {today_ymd} ({today_weekday})
 
 출력 형식 (다른 텍스트 없이 이 JSON만):
 {{"tasks":[ ... ]}}
@@ -232,14 +232,20 @@ TASK_TYPES_ALLOWED = frozenset({
 })
 
 
+_WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
+
+
 def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
     """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. 병원명 정규화·빈 행 제거."""
     today = date.today()
     today_ymd = today.strftime("%Y-%m-%d")
+    today_weekday = _WEEKDAY_KO[today.weekday()]
     default_summary = text[:50].strip() if text else "업무"
     default_tasks: list[dict] = []
     try:
-        raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(today_ymd=today_ymd, message=text))
+        raw = _call_gemini(
+            GEMINI_EXTRACT_PROMPT.format(today_ymd=today_ymd, today_weekday=today_weekday, message=text)
+        )
     except Exception as e:
         print(f"[analyze_and_extract] Gemini 호출 실패: {e}", flush=True)
         return default_summary, default_tasks

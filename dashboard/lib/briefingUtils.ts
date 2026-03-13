@@ -48,5 +48,6 @@ export function generateBriefingFromTasks(tasks: TaskRow[]): string {
     parts.push(`총 ${tasks.length}건의 업무가 있습니다.`);
   }
 
-  return "대표님, " + parts.join(" ") + (parts.length ? "." : "");
+  const raw = "대표님, " + parts.join(" ");
+  return raw.replace(/\.+$/, ".") || "대표님, 현재 표시된 업무가 없습니다.";
 }

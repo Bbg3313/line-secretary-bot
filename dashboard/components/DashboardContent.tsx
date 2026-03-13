@@ -6,6 +6,7 @@ import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import {
   isDeadlineTodayKST,
+  isDeadlineTodayOrPastKST,
   getDateKeyKST,
   getTodayDateKeyKST,
 } from "@/lib/scheduleUtils";
@@ -56,17 +57,17 @@ export default function DashboardContent({
   const tasksToShow = useMemo(() => {
     let list = tasks;
     if (filterMode === "today_task") {
-      list = list.filter(
-        (t) =>
-          !isDone(t?.status) &&
-          (isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey)
-      );
+      list = list.filter((t) => isDeadlineTodayOrPastKST(t?.deadline ?? null));
     } else if (filterMode === "urgent") {
       list = list.filter(
         (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
       );
     } else if (filterMode === "today_schedule") {
-      list = list.filter((t) => getDateKeyKST(t?.created_at ?? "") === todayKey);
+      list = list.filter(
+        (t) =>
+          isDeadlineTodayKST(t?.deadline ?? null) ||
+          getDateKeyKST(t?.created_at ?? "") === todayKey
+      );
     }
     if (quickHospital) {
       list = list.filter((t) => (t.hospital_name || "").trim() === quickHospital);
