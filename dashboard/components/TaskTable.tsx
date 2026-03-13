@@ -159,6 +159,10 @@ export default function TaskTable({
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+  const activeTotal =
+    (statusCounts["대기"] || 0) +
+    (statusCounts["진행중"] || 0) +
+    (statusCounts["긴급"] || 0);
 
   // 상태 필터 적용 — getStatus 사용해서 드롭다운 변경 직후 필터에도 반영
   // 요구사항: "완료" 상태는 기본(전체) 목록에서는 숨기고, "완료" 탭에서만 보여준다.
@@ -263,7 +267,10 @@ export default function TaskTable({
       <div className="mb-4 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-400">
         <span className="font-medium">상태</span>
         {[
-          { key: null as "대기" | "진행중" | "완료" | "긴급" | null, label: "전체" },
+          {
+            key: null as "대기" | "진행중" | "완료" | "긴급" | null,
+            label: `전체 (${activeTotal})`,
+          },
           { key: "대기" as const, label: `대기 (${statusCounts["대기"] || 0})` },
           { key: "진행중" as const, label: `진행중 (${statusCounts["진행중"] || 0})` },
           { key: "완료" as const, label: `완료 (${statusCounts["완료"] || 0})` },
