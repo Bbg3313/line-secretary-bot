@@ -100,8 +100,7 @@ export default function TaskTable({
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
   const getAssignee = (row: TaskRow) =>
     localAssignee[row.id] ??
-    // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
-    (row.assignee as string | null | undefined) ??
+    ((row as any).assignee as string | null | undefined) ??
     "미정";
 
   async function updateStatus(id: string, next: string) {
@@ -149,7 +148,6 @@ export default function TaskTable({
         hospital_name: payload.hospital_name || "기타",
         task_type: payload.task_type || "개인",
         deadline: payload.deadline || null,
-        // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
         assignee: payload.assignee ?? getAssignee(editRow),
         status: payload.status,
         title: payload.title,
@@ -364,8 +362,10 @@ export default function TaskTable({
                       onChange={async (e) => {
                         const next = e.target.value;
                         setLocalAssignee((prev) => ({ ...prev, [row.id]: next }));
-                        // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
-                        const { error } = await supabase.from("tasks").update({ assignee: next }).eq("id", row.id);
+                        const { error } = await supabase
+                          .from("tasks")
+                          .update({ assignee: next })
+                          .eq("id", row.id);
                         if (error) {
                           console.error(error);
                           alert("담당자 변경 실패: " + error.message);
@@ -527,8 +527,9 @@ function EditTaskModal({
   const [hospital_name, setHospitalName] = useState(row.hospital_name?.trim() || "기타");
   const [task_type, setTaskType] = useState(row.task_type?.trim() || "개인");
   const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
-  // @ts-expect-error: assignee 컬럼은 런타임 기준으로 존재한다고 가정
-  const [assignee, setAssignee] = useState<string>((row.assignee as string | null | undefined) || "미정");
+  const [assignee, setAssignee] = useState<string>(
+    ((row as any).assignee as string | null | undefined) || "미정",
+  );
   const [status, setStatus] = useState(row.status || "대기");
   const [title, setTitle] = useState(row.title?.trim() || "");
   const [description, setDescription] = useState(row.description?.trim() || "");
