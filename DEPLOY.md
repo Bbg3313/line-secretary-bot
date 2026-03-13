@@ -66,11 +66,21 @@
 - `SUPABASE_KEY` — Supabase service_role 또는 anon key  
 - `GEMINI_MODEL` — (선택) 예: `models/gemini-2.0-flash`
 
-## 4. 배포 후 LINE 웹훅 URL 변경
+## 4. 배포 완료 후 체크리스트 (필수)
 
-- Render 배포가 끝나면 **서비스 URL**이 나옵니다. 예: `https://line-secretary-bot-xxxx.onrender.com`
-- LINE Developers 콘솔 → 해당 채널 → **Messaging API** 탭 → **Webhook URL**을  
-  `https://line-secretary-bot-xxxx.onrender.com/callback` (또는 `/webhook`) 로 설정하고 **Verify** 후 저장.
+빌드가 끝나고 **Live** 상태가 되면 아래 순서대로 진행하세요.
+
+| 순서 | 작업 | 확인 |
+|------|------|------|
+| ① | Render 대시보드에서 **서비스 URL** 복사 (예: `https://line-secretary-bot-xxxx.onrender.com`) | |
+| ② | 브라우저에서 `서비스URL/` 접속 → `{"status":"ok"}` 나오면 서버 정상 | |
+| ③ | [LINE Developers](https://developers.line.biz/) → 본인 채널 → **Messaging API** 탭 | |
+| ④ | **Webhook URL**에 `서비스URL/callback` 입력 (예: `https://line-secretary-bot-xxxx.onrender.com/callback`) | |
+| ⑤ | **Verify** 클릭 → 성공 시 **Use** 버튼으로 저장 | |
+| ⑥ | LINE 앱에서 봇에게 메시지 보내서 응답 오는지 확인 | |
+
+- 무료 플랜은 **15분 비활성 시 슬립**됩니다. 그 후 첫 요청은 약 50초 지연될 수 있습니다.
+- 웹훅은 **/callback** 또는 **/webhook** 둘 다 사용 가능합니다.
 
 ## 5. 서버 실행 명령어 정리
 
