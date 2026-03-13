@@ -58,7 +58,9 @@ async def log_requests(request: Request, call_next):
     """모든 요청 로그 (LINE POST 오는지 확인용)."""
     method = request.method
     path = request.url.path
-    print(f"[요청] {method} {path}")
+    print(f"[요청] {method} {path}", flush=True)
+    if method == "POST" and path in ("/callback", "/webhook"):
+        print(">>> LINE 웹훅 POST 도착 <<<", flush=True)
     response = await call_next(request)
     return response
 
@@ -73,18 +75,21 @@ GEMINI_PROMPT_TEMPLATE = """다음 메시지를 일정·할일·비서 관점에
 """
 
 # 원자화: 메시지에 포함된 업무를 개별 단위로 분리해 JSON 추출
-GEMINI_EXTRACT_PROMPT = """다음 메시지에 포함된 "할 일(업무)"을 하나씩 개별로 분리해서 추출해줘.
-각 업무마다 다음을 채워줘. 반드시 아래 JSON 형식만 출력하고 다른 글은 넣지 마세요.
+GEMINI_EXTRACT_PROMPT = """당신은 JSON만 출력하는 API입니다. 설명, 마크다운, 코드블록(```) 없이 반드시 아래 형식의 JSON 한 덩어리만 출력하세요.
 
-- summary: 전체를 한 줄 요약 (예: "의원 업무 3건")
-- tasks: 업무가 있으면 배열, 없으면 []
-  각 항목:
-  - hospital_name: 병원/의원명. 예시로 나온 이름(Jy, Thebb, our, Delp, Clyve 등)이 있으면 그대로, 없으면 null
-  - task_type: "마케팅" 또는 "미팅" 또는 "개인" 중 하나, 없으면 null
-  - deadline: 마감일 YYYY-MM-DD (예: 2025-03-15), 없으면 null
-  - description: 해당 업무 내용 한 줄 요약 (필수)
+규칙:
+1. 응답 전체는 반드시 하나의 유효한 JSON 객체만 포함한다.
+2. 키 이름은 정확히 "summary"와 "tasks" 두 개만 사용한다. 따옴표나 키 이름을 바꾸지 마세요.
+3. summary: 문자열. 전체를 한 줄 요약 (예: "의원 업무 3건").
+4. tasks: 배열. 업무가 있으면 객체 배열, 없으면 [].
+   각 항목 객체는 반드시 다음 키를 가진다: hospital_name, task_type, deadline, description.
+   - hospital_name: 병원/의원명. 있으면 문자열, 없으면 null
+   - task_type: "마케팅" 또는 "미팅" 또는 "개인" 중 하나, 없으면 null
+   - deadline: YYYY-MM-DD (예: 2025-03-15), 없으면 null
+   - description: 해당 업무 내용 한 줄 요약 (필수, 문자열)
 
-{"summary":"...","tasks":[{"hospital_name":"... 또는 null","task_type":"마케팅|미팅|개인 또는 null","deadline":"YYYY-MM-DD 또는 null","description":"업무 내용 요약"}]}
+출력 예시 (이 형식만 따르고 다른 텍스트는 출력하지 마세요):
+{"summary":"의원 업무 2건","tasks":[{"hospital_name":"Jy","task_type":"마케팅","deadline":"2025-03-15","description":"SNS 게시"},{"hospital_name":null,"task_type":"개인","deadline":null,"description":"회의 준비"}]}
 
 메시지:
 {message}
@@ -114,32 +119,56 @@ def analyze_with_gemini(text: str) -> str:
 
 
 def analyze_and_extract(text: str) -> tuple[str, list[dict]]:
-    """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. JSON 파싱 실패 시 요약만."""
-    raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(message=text))
-    summary = "일정·업무 요약"
-    tasks: list[dict] = []
-    json_match = re.search(r"\{[\s\S]*\}", raw)
-    if json_match:
-        try:
-            data = json.loads(json_match.group())
-            summary = (data.get("summary") or summary).strip() or summary
-            for t in data.get("tasks") or []:
-                if not isinstance(t, dict):
-                    continue
-                desc = (t.get("description") or t.get("title") or "").strip()
-                if not desc:
-                    continue
-                tasks.append({
-                    "description": desc,
-                    "hospital_name": (t.get("hospital_name") or "").strip() or None,
-                    "task_type": (t.get("task_type") or "").strip() or None,
-                    "deadline": (t.get("deadline") or "").strip() or None,
-                })
-        except (json.JSONDecodeError, TypeError):
-            pass
-    if not summary or summary.startswith("(Gemini"):
-        summary = raw[:200] if raw else "분석 없음"
-    return summary, tasks
+    """Gemini로 메시지 분석 후 summary와 개별 업무 리스트 반환. 파싱 실패 시 기본값 반환."""
+    default_summary = "일정·업무 요약"
+    default_tasks: list[dict] = []
+    try:
+        raw = _call_gemini(GEMINI_EXTRACT_PROMPT.format(message=text))
+    except Exception as e:
+        print(f"[analyze_and_extract] Gemini 호출 실패: {e}", flush=True)
+        return default_summary, default_tasks
+    raw = (raw or "").strip()
+    try:
+        # 마크다운 코드블록 제거
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```\s*$", "", raw)
+        json_match = re.search(r"\{[\s\S]*\}", raw)
+        if not json_match:
+            summary = raw[:200] if raw else default_summary
+            return summary, default_tasks
+        data = json.loads(json_match.group())
+        if not isinstance(data, dict):
+            return (raw[:200] if raw else default_summary), default_tasks
+        summary = default_summary
+        if "summary" in data:
+            s = data.get("summary")
+            if s is not None and isinstance(s, str) and s.strip():
+                summary = s.strip()
+        raw_tasks = data.get("tasks") if isinstance(data.get("tasks"), list) else []
+        tasks = []
+        for t in raw_tasks:
+            if not isinstance(t, dict):
+                continue
+            desc = (t.get("description") or t.get("title") or "").strip()
+            if not desc:
+                continue
+            def _str_or_none(v) -> str | None:
+                if v is None: return None
+                if isinstance(v, str): return v.strip() or None
+                return str(v).strip() or None
+            tasks.append({
+                "description": desc,
+                "hospital_name": _str_or_none(t.get("hospital_name")),
+                "task_type": _str_or_none(t.get("task_type")),
+                "deadline": _str_or_none(t.get("deadline")),
+            })
+        if not summary or summary.startswith("(Gemini"):
+            summary = raw[:200] if raw else default_summary
+        return summary, tasks
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError, AttributeError) as e:
+        print(f"[analyze_and_extract] 파싱/추출 오류: {e}", flush=True)
+        return (raw[:200] if raw else default_summary), default_tasks
 
 
 def list_gemini_generate_models(limit: int = 30) -> list[str]:
@@ -474,6 +503,17 @@ async def debug_env():
     }
 
 
+@app.get("/debug/webhook-url")
+async def debug_webhook_url(request: Request):
+    """LINE Developers에 넣을 Webhook URL (이 요청이 도달한 주소 기준)."""
+    host = request.headers.get("host", "본인서비스.onrender.com")
+    url = f"https://{host}/callback"
+    return {
+        "line_webhook_url": url,
+        "설명": "LINE Developers → 본인 채널 → Messaging API 탭 → Webhook URL에 위 line_webhook_url 을 그대로 복사해서 넣으세요.",
+    }
+
+
 @app.get("/callback")
 async def callback_get(request: Request):
     """LINE Verify 등 GET 요청용. 웹훅은 POST만 처리."""
@@ -498,17 +538,17 @@ async def _handle_line_webhook(request: Request):
     signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
     body_str = body.decode("utf-8")
-    print(f"[웹훅] 수신 body_len={len(body_str)}, signature={'있음' if signature else '없음'}")
+    print(f"[웹훅] 수신 body_len={len(body_str)}, signature={'있음' if signature else '없음'}", flush=True)
     if not _verify_line_signature(body_str, signature, CHANNEL_SECRET or ""):
-        print("[웹훅] 서명 오류 (CHANNEL_SECRET 또는 LINE 서명 불일치)")
+        print("[웹훅] 서명 오류 (CHANNEL_SECRET 또는 LINE 서명 불일치)", flush=True)
         raise HTTPException(status_code=400, detail="Invalid signature")
-    print("[웹훅] 서명 검증 통과, 처리 시작")
+    print("[웹훅] 서명 검증 통과, 처리 시작", flush=True)
     try:
         handler.handle(body_str, signature)
-        print("[웹훅] 처리·답장 완료")
+        print("[웹훅] 처리·답장 완료", flush=True)
     except Exception as e:
         import traceback
-        print(f"[웹훅] 처리 오류: {e}")
+        print(f"[웹훅] 처리 오류: {e}", flush=True)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     return {"status": "ok"}
