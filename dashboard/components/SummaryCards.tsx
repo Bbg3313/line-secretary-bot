@@ -18,9 +18,9 @@ export default function SummaryCards({
   onClearFilter,
 }: SummaryCardsProps) {
   const cards: { key: "today_task" | "urgent" | "today_schedule"; label: string; value: number; unit: string; icon: string; className: string; valueClass: string }[] = [
-    { key: "today_task", label: "오늘의 할 일", value: todayTaskCount, unit: "건", icon: "📋", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
+    { key: "today_task", label: "오늘 마감", value: todayTaskCount, unit: "건", icon: "📋", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
     { key: "urgent", label: "긴급 · 주의", value: urgentCount, unit: "건", icon: "⚠️", className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30", valueClass: "text-amber-300" },
-    { key: "today_schedule", label: "오늘 일정", value: todayScheduleCount, unit: "건", icon: "📅", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
+    { key: "today_schedule", label: "전체 잔여 업무", value: todayScheduleCount, unit: "건", icon: "📅", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
   ];
 
   return (
@@ -48,9 +48,13 @@ export default function SummaryCards({
                   }
                 : undefined
             }
-            className={`rounded-xl border ${card.className} p-6 shadow-lg transition ${
-              canClick ? "cursor-pointer" : ""
-            } ${active ? "ring-2 ring-emerald-500/60 ring-offset-2 ring-offset-[#0f172a]" : ""}`}
+            className={`rounded-xl border ${card.className} p-6 shadow-lg transition-transform transition-colors duration-150 ${
+              canClick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-xl" : ""
+            } ${
+              active
+                ? "border-emerald-400 ring-2 ring-emerald-500/60 ring-offset-2 ring-offset-[#0f172a]"
+                : ""
+            }`}
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {card.label}

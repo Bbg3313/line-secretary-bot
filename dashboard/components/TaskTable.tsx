@@ -201,11 +201,11 @@ export default function TaskTable({
 
   const filterLabel =
     filterMode === "today_task"
-      ? "오늘의 할 일"
+      ? "오늘 마감"
       : filterMode === "urgent"
         ? "긴급 · 주의"
         : filterMode === "today_schedule"
-          ? "오늘 일정"
+          ? "전체 잔여 업무"
           : null;
 
   return (

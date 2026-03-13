@@ -4,12 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import {
-  isDeadlineTodayKST,
-  isDeadlineTodayOrPastKST,
-  getDateKeyKST,
-  getTodayDateKeyKST,
-} from "@/lib/scheduleUtils";
+import { isDeadlineTodayKST, isDeadlineTodayOrPastKST, getTodayDateKeyKST } from "@/lib/scheduleUtils";
 import { generateBriefingFromTasks } from "@/lib/briefingUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
@@ -42,8 +37,6 @@ export default function DashboardContent({
   const [quickTaskType, setQuickTaskType] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const todayKey = useMemo(() => getTodayDateKeyKST(), []);
-
   const uniqueHospitals = useMemo(() => {
     const set = new Set(tasks.map((t) => (t.hospital_name || "").trim()).filter(Boolean));
     return Array.from(set).sort();
@@ -57,17 +50,25 @@ export default function DashboardContent({
   const tasksToShow = useMemo(() => {
     let list = tasks;
     if (filterMode === "today_task") {
-      list = list.filter((t) => isDeadlineTodayOrPastKST(t?.deadline ?? null));
+      // 오늘 마감만
+      list = list.filter((t) => isDeadlineTodayKST(t?.deadline ?? null));
     } else if (filterMode === "urgent") {
-      list = list.filter(
-        (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
-      );
+      // 긴급 상태이거나, 마감이 이미 지났는데 아직 완료가 아닌 업무
+      list = list.filter((t) => {
+        const status = t?.status;
+        const deadline = t?.deadline ?? null;
+        const done = isDone(status);
+        const isUrgentStatus = status === "긴급";
+        const isOverdue =
+          !done &&
+          !!deadline &&
+          isDeadlineTodayOrPastKST(deadline) &&
+          !isDeadlineTodayKST(deadline);
+        return isUrgentStatus || isOverdue;
+      });
     } else if (filterMode === "today_schedule") {
-      list = list.filter(
-        (t) =>
-          isDeadlineTodayKST(t?.deadline ?? null) ||
-          getDateKeyKST(t?.created_at ?? "") === todayKey
-      );
+      // 전체 잔여 업무: 완료가 아닌 전체
+      list = list.filter((t) => !isDone(t?.status));
     }
     if (quickHospital) {
       list = list.filter((t) => (t.hospital_name || "").trim() === quickHospital);
@@ -76,7 +77,7 @@ export default function DashboardContent({
       list = list.filter((t) => (t.task_type || "").trim() === quickTaskType);
     }
     return list;
-  }, [tasks, filterMode, todayKey, quickHospital, quickTaskType]);
+  }, [tasks, filterMode, quickHospital, quickTaskType]);
 
   const briefingText = useMemo(() => generateBriefingFromTasks(tasksToShow), [tasksToShow]);
 

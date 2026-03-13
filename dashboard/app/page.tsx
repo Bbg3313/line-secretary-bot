@@ -42,16 +42,30 @@ export default async function DashboardPage() {
   const scheduleChats = getScheduleChats(chats);
   const todayKey = getTodayDateKeyKST();
 
-  const totalTasks = tasks.length;
   const isDone = (s: string | undefined) => s === "완료" || s === "done";
-  const dueTodayCount = tasks.filter(
-    (t) => !isDone(t?.status) && isDeadlineTodayKST(t?.deadline ?? null)
+  const totalTasks = tasks.length;
+
+  // 1) 오늘 마감: 마감이 "오늘"인 업무 개수
+  const todayDeadlineCount = tasks.filter((t) =>
+    isDeadlineTodayKST(t?.deadline ?? null)
   ).length;
-  const todayTaskCount = tasks.filter((t) => isDeadlineTodayOrPastKST(t?.deadline ?? null)).length;
-  const todayScheduleCount = tasks.filter(
-    (t) =>
-      isDeadlineTodayKST(t?.deadline ?? null) || getDateKeyKST(t?.created_at ?? "") === todayKey
-  ).length;
+
+  // 2) 긴급 · 지연: 상태가 긴급이거나, 마감이 이미 지났는데(오늘 이후 과거) 아직 완료가 아닌 업무
+  const urgentOrOverdueCount = tasks.filter((t) => {
+    const status = t?.status;
+    const deadline = t?.deadline ?? null;
+    const done = isDone(status);
+    const isUrgentStatus = status === "긴급";
+    const isOverdue =
+      !done &&
+      !!deadline &&
+      isDeadlineTodayOrPastKST(deadline) &&
+      !isDeadlineTodayKST(deadline);
+    return isUrgentStatus || isOverdue;
+  }).length;
+
+  // 3) 전체 잔여 업무: 완료가 아닌 모든 업무 개수
+  const remainingCount = tasks.filter((t) => !isDone(t?.status)).length;
 
   return (
     <main className="space-y-10">
@@ -93,9 +107,9 @@ export default async function DashboardPage() {
       {hasSupabaseConfig && (
         <DashboardContent
           tasks={tasks}
-          todayTaskCount={todayTaskCount}
-          dueTodayCount={dueTodayCount}
-          todayScheduleCount={todayScheduleCount}
+          todayTaskCount={todayDeadlineCount}
+          dueTodayCount={urgentOrOverdueCount}
+          todayScheduleCount={remainingCount}
           totalTasks={totalTasks}
           hasSupabaseConfig={hasSupabaseConfig}
           supabaseError={supabaseError}
