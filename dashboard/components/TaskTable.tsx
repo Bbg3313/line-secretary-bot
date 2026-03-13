@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import {
   formatDeadlineWithWeekday,
   isDeadlineTodayKST,
-  isDeadlineTomorrowKST,
+  isDeadlineSoonKST,
 } from "@/lib/scheduleUtils";
 
 function statusLabel(s: string): string {
@@ -47,15 +47,12 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   }
   const text = formatDeadlineWithWeekday(deadline) || deadline.slice(0, 10);
   const isToday = isDeadlineTodayKST(deadline);
-  const isTomorrow = isDeadlineTomorrowKST(deadline);
+  const isSoon = isDeadlineSoonKST(deadline, 2);
   return (
-    <span className={`font-mono ${isToday ? "text-red-400" : isTomorrow ? "text-amber-400" : "text-slate-300"}`}>
+    <span className={`font-mono ${isToday ? "text-red-400" : isSoon ? "text-amber-400" : "text-slate-300"}`}>
       {text}
       {isToday && (
         <span className="ml-1.5 rounded bg-red-500/30 px-1.5 py-0.5 text-xs font-medium text-red-300">오늘</span>
-      )}
-      {isTomorrow && !isToday && (
-        <span className="ml-1.5 rounded bg-amber-500/30 px-1.5 py-0.5 text-xs font-medium text-amber-300">내일</span>
       )}
     </span>
   );
@@ -100,10 +97,7 @@ export default function TaskTable({
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
 
-  async function cycleStatus(id: string, current: string) {
-    const order = ["대기", "진행중", "완료", "긴급"];
-    const idx = order.indexOf(current);
-    const next = order[(idx + 1 + order.length) % order.length];
+  async function updateStatus(id: string, next: string) {
     setLocalStatus((prev) => ({ ...prev, [id]: next }));
     const { error } = await supabase.from("tasks").update({ status: next }).eq("id", id);
     if (error) {
@@ -178,14 +172,11 @@ export default function TaskTable({
   }
 
   // 상태별 개수 (상태 탭 표시용)
-  const statusCounts = tasks.reduce(
-    (acc, t) => {
-      const s = statusLabel(t.status);
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
+  const statusCounts = tasks.reduce((acc, t) => {
+    const s = statusLabel(t.status);
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   // 상태 필터 적용
   const filteredByStatus = statusFilter
@@ -387,14 +378,17 @@ export default function TaskTable({
                     <DeadlineCell deadline={row.deadline} />
                   </td>
                   <td className="px-4 py-4">
-                    <button
-                      type="button"
-                      onClick={() => cycleStatus(row.id, statusLabel(getStatus(row)))}
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(getStatus(row))} transition-colors`}
-                      title="상태 변경"
+                    <select
+                      value={statusLabel(getStatus(row))}
+                      onChange={(e) => updateStatus(row.id, e.target.value)}
+                      className={`rounded-md border px-2 py-1 text-xs font-medium bg-transparent ${statusBadgeClass(getStatus(row))} focus:outline-none`}
                     >
-                      {statusLabel(getStatus(row))}
-                    </button>
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s} className="bg-slate-800 text-slate-100">
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="max-w-[220px] px-4 py-4 text-slate-200">
                     <button

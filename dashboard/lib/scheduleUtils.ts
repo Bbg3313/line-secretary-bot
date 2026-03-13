@@ -78,6 +78,21 @@ export function isDeadlineTodayKST(deadline: string | null): boolean {
   return getDateKeyKST(deadline) === getTodayDateKeyKST();
 }
 
+/** 한국 시간 기준으로 마감일까지 남은 일수 (오늘=0, 내일=1). 계산 실패 시 null */
+export function daysUntilDeadlineKST(deadline: string | null): number | null {
+  if (!deadline || !deadline.trim()) return null;
+  try {
+    const dKey = getDateKeyKST(deadline);
+    const tKey = getTodayDateKeyKST();
+    const d = new Date(dKey + "T00:00:00+09:00");
+    const t = new Date(tKey + "T00:00:00+09:00");
+    const diffMs = d.getTime() - t.getTime();
+    return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  } catch {
+    return null;
+  }
+}
+
 /** 마감일이 오늘이거나 이미 지난 날(지연)인지. 기한 없음은 false */
 export function isDeadlineTodayOrPastKST(deadline: string | null): boolean {
   if (!deadline || !deadline.trim()) return false;
@@ -97,6 +112,13 @@ export function getTomorrowDateKeyKST(): string {
 export function isDeadlineTomorrowKST(deadline: string | null): boolean {
   if (!deadline || !deadline.trim()) return false;
   return getDateKeyKST(deadline) === getTomorrowDateKeyKST();
+}
+
+/** 마감이 오늘은 아니지만 N일 이내(1~N일)로 촉박한지 여부 */
+export function isDeadlineSoonKST(deadline: string | null, days: number = 2): boolean {
+  const d = daysUntilDeadlineKST(deadline);
+  if (d === null) return false;
+  return d > 0 && d <= days;
 }
 
 /** 마감일 포맷 "03/14 (토)" - 한국 시간, 대시보드 표시용 */
