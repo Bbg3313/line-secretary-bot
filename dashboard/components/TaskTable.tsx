@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
+import { revalidateDashboard } from "@/app/actions";
 import {
   formatDeadlineWithWeekday,
   isDeadlineTodayKST,
@@ -354,19 +355,21 @@ export default function TaskTable({
 
                         const payload = { assignee: next, status: nextStatus };
 
-                        const { error } = await supabase.from("tasks").update(payload).eq("id", row.id);
+                        const { error } = await supabase
+                          .from("tasks")
+                          .update(payload)
+                          .eq("id", row.id)
+                          .select("id, assignee, status")
+                          .single();
+
                         if (error) {
                           console.error(error);
-                          if (
-                            String(error.message || "").includes("assignee") ||
-                            String(error.message || "").includes("status")
-                          ) {
-                            console.warn(
-                              "tasks 테이블에 assignee/status 컬럼이 없어 로컬 상태로만 담당자를 변경합니다.",
-                            );
-                            return;
-                          }
-                          alert("담당자 변경 실패: " + error.message);
+                          const msg = String(error.message || "");
+                          const hint =
+                            msg.includes("assignee") || msg.includes("status")
+                              ? "\n\nSupabase SQL Editor에서 supabase_migration_assignee.sql 내용(ALTER TABLE ... assignee ...)을 실행했는지 확인하세요."
+                              : "";
+                          alert("담당자 변경 실패: " + msg + hint);
                           setLocalAssignee((prev) => {
                             const u = { ...prev };
                             delete u[row.id];
@@ -379,14 +382,16 @@ export default function TaskTable({
                           });
                           return;
                         }
-                        // 담당자가 A→B로 변경될 때마다 무조건 토스트
+
                         if (prevAssignee !== next) {
                           setToastMessage(`🚀 ${next}님에게 업무가 배정(변경)되었습니다.`);
                           setTimeout(() => setToastMessage(null), 3000);
                         }
+                        try {
+                          await revalidateDashboard();
+                        } catch (_) {}
                         router.refresh();
-                        // 카운트 등 최신 반영을 위해 잠시 후 페이지 새로고침
-                        setTimeout(() => window.location.reload(), 800);
+                        setTimeout(() => window.location.reload(), 1200);
                       }}
                       className="min-w-[150px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                     >

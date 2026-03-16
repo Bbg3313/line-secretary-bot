@@ -31,5 +31,6 @@ export type TaskRow = {
   task_type: string | null;
   status: string;
   deadline: string | null;
+  assignee: string | null;
   created_at: string;
 };
