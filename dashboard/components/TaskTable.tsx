@@ -434,11 +434,10 @@ export default function TaskTable({
                           type="button"
                           onClick={async () => {
                             await updateStatus(row.id, "작업완료");
-                            setStatusFilter("작업완료");
                           }}
-                          className="rounded bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                          className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:border-sky-400"
                         >
-                          완료
+                          작업완료
                         </button>
                       )}
                       <button
