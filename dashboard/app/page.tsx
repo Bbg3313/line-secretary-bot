@@ -1,6 +1,6 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { hasSupabaseConfig, supabase, supabaseUrlPrefix } from "@/lib/supabase";
-import { isDeadlineOverdueKST } from "@/lib/scheduleUtils";
+import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned } from "@/lib/scheduleUtils";
 import DashboardContent from "@/components/DashboardContent";
 
 export const revalidate = 60;
@@ -38,15 +38,15 @@ export default async function DashboardPage() {
   const tasks = tasksRes.data;
   const supabaseError = chatsRes.error || tasksRes.error;
 
-  // 상태 정규화: 오직 지시 대기 / 지시 완료
-  const normalStatus = (s: string | undefined) =>
-    s === "지시 완료" || s === "완료" || s === "done" ? "지시 완료" : "지시 대기";
+  // 지시 완료 = status가 지시 완료/완료/done 이거나, 담당자가 지정된 경우(구 데이터 호환)
+  const is지시완료 = (t: TaskRow) =>
+    normalizeTaskStatus(t?.status) === "지시 완료" || isAssigneeAssigned((t as { assignee?: string | null }).assignee);
 
-  // 1) 지시 대기 2) 지시 완료 3) 지연된 지시 (지시 대기 중 마감 지남)
-  const inboxCount = tasks.filter((t) => normalStatus(t?.status) === "지시 대기").length;
-  const inProgressCount = tasks.filter((t) => normalStatus(t?.status) === "지시 완료").length;
+  // 1) 지시 대기 2) 지시 완료 3) 지연된 지시 (지시 대기 중 마감일 지남)
+  const inProgressCount = tasks.filter(is지시완료).length;
+  const inboxCount = tasks.length - inProgressCount;
   const urgentOverdueCount = tasks.filter((t) => {
-    if (normalStatus(t?.status) !== "지시 대기") return false;
+    if (is지시완료(t)) return false;
     const deadline = t?.deadline ?? null;
     return !!deadline && isDeadlineOverdueKST(deadline);
   }).length;

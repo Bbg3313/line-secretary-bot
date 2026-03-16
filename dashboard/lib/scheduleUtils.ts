@@ -72,6 +72,19 @@ export function getDateKeyKST(createdAt: string): string {
   }
 }
 
+/** 상태값을 '지시 대기' | '지시 완료' 로만 통일 (카운트·필터 공통) */
+export function normalizeTaskStatus(status: string | null | undefined): "지시 대기" | "지시 완료" {
+  const s = (status ?? "").trim();
+  if (s === "지시 완료" || s === "완료" || s === "done") return "지시 완료";
+  return "지시 대기";
+}
+
+/** 담당자 문자열이 '지정됨'(미정 아님)인지 */
+export function isAssigneeAssigned(assignee: string | null | undefined): boolean {
+  const a = (assignee ?? "").trim();
+  return a.length > 0 && a !== "미정";
+}
+
 /** 마감일(deadline)이 오늘(한국 시간)인지 여부 */
 export function isDeadlineTodayKST(deadline: string | null): boolean {
   if (!deadline || !deadline.trim()) return false;

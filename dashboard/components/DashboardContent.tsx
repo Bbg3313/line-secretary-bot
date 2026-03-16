@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { isDeadlineOverdueKST } from "@/lib/scheduleUtils";
+import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned } from "@/lib/scheduleUtils";
 import { generateBriefingFromTasks } from "@/lib/briefingUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
@@ -29,9 +29,8 @@ type DashboardContentProps = {
   supabaseError?: string;
 };
 
-// 상태 정규화: 지시 대기 / 지시 완료만
-function normalStatus(s: string | undefined) {
-  return s === "지시 완료" || s === "완료" || s === "done" ? "지시 완료" : "지시 대기";
+function is지시완료(t: TaskRow) {
+  return normalizeTaskStatus(t?.status) === "지시 완료" || isAssigneeAssigned((t as { assignee?: string | null }).assignee);
 }
 
 export default function DashboardContent({
@@ -54,12 +53,12 @@ export default function DashboardContent({
   const tasksToShow = useMemo(() => {
     let list = tasks;
     if (filterMode === "inbox") {
-      list = list.filter((t) => normalStatus(t?.status) === "지시 대기");
+      list = list.filter((t) => !is지시완료(t));
     } else if (filterMode === "in_progress") {
-      list = list.filter((t) => normalStatus(t?.status) === "지시 완료");
+      list = list.filter(is지시완료);
     } else if (filterMode === "urgent_overdue") {
       list = list.filter((t) => {
-        if (normalStatus(t?.status) !== "지시 대기") return false;
+        if (is지시완료(t)) return false;
         const deadline = t?.deadline ?? null;
         return !!deadline && isDeadlineOverdueKST(deadline);
       });
