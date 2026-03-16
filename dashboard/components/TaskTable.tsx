@@ -488,9 +488,17 @@ export default function TaskTable({
               {contentPopup.title?.trim() || "—"}
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상세 내용</div>
-            <p className="whitespace-pre-wrap text-sm text-gray-700">
+            <p className="mb-3 whitespace-pre-wrap text-sm text-gray-700">
               {contentPopup.description?.trim() || "—"}
             </p>
+            {contentPopup.source_message && (
+              <>
+                <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">원본 메시지 (LINE)</div>
+                <p className="whitespace-pre-wrap text-sm text-gray-700">
+                  {contentPopup.source_message.trim()}
+                </p>
+              </>
+            )}
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
