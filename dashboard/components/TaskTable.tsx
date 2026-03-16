@@ -97,7 +97,7 @@ export default function TaskTable({
   const router = useRouter();
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
   const [localAssignee, setLocalAssignee] = useState<Record<string, string>>({});
-  const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
+  const [contentPopup, setContentPopup] = useState<TaskRow | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | null>(null);
@@ -416,13 +416,13 @@ export default function TaskTable({
                   <td className={`max-w-[260px] px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
-                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${
+                      className={`max-w-full cursor-pointer text-left focus:outline-none ${
                         completed ? "opacity-70 text-gray-600" : "font-medium"
                       }`}
-                      onClick={() => setContentPopup({ title: row.title || "—", description: row.description || "—" })}
+                      onClick={() => setContentPopup(row)}
                       title="전체 내용 보기"
                     >
-                      <span className={`block truncate ${completed ? "line-through" : ""}`}>{truncatedContent(row)}</span>
+                      <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
                   <td className="px-4 py-5">
@@ -465,10 +465,32 @@ export default function TaskTable({
             className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500">제목</div>
-            <p className="mb-4 text-gray-900">{contentPopup.title}</p>
-            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500">내용</div>
-            <p className="whitespace-pre-wrap text-gray-700">{contentPopup.description}</p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</div>
+            <p className="mb-3 text-sm font-medium text-gray-900">
+              {contentPopup.hospital_name?.trim() || "기타"}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형 · 담당자 · 상태</div>
+            <p className="mb-3 text-sm text-gray-700">
+              {(contentPopup.task_type || "개인")} ·{" "}
+              {(((contentPopup as any).assignee as string | null | undefined)?.trim() || "미정")} ·{" "}
+              {statusLabel(contentPopup.status || "")}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</div>
+            <p className="mb-3 text-sm text-gray-700">
+              {contentPopup.deadline ? (
+                <DeadlineCell deadline={contentPopup.deadline} />
+              ) : (
+                <span className="text-gray-500">기한 없음</span>
+              )}
+            </p>
+            <div className="mb-1 mt-2 text-xs font-medium uppercase tracking-wider text-gray-500">제목</div>
+            <p className="mb-3 text-base font-semibold text-gray-900">
+              {contentPopup.title?.trim() || "—"}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상세 내용</div>
+            <p className="whitespace-pre-wrap text-sm text-gray-700">
+              {contentPopup.description?.trim() || "—"}
+            </p>
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
