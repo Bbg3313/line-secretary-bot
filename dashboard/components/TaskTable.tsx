@@ -12,15 +12,16 @@ import {
   isDeadlineOverdueKST,
 } from "@/lib/scheduleUtils";
 
-/** 상태는 오직 두 가지: 지시 대기 / 지시 완료 (기존 DB 값은 여기서 정규화) */
+/** 상태 라벨: 지시 대기 / 지시 완료 / 작업완료 (기존 DB 값은 여기서 정규화) */
 function statusLabel(s: string): string {
+  if (s === "작업완료") return "작업완료";
   if (s === "지시 완료") return "지시 완료";
   if (s === "완료" || s === "done") return "지시 완료";
   return "지시 대기";
 }
 
 function is지시완료(s: string): boolean {
-  return statusLabel(s) === "지시 완료";
+  return statusLabel(s) === "지시 완료" || statusLabel(s) === "작업완료";
 }
 
 /** 상태 뱃지 (라이트): 지시 대기 = 회색/빨강 파스텔, 지시 완료 = 초록 파스텔 */
@@ -62,7 +63,7 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   );
 }
 
-const STATUS_OPTIONS = ["지시 대기", "지시 완료"] as const;
+const STATUS_OPTIONS = ["지시 대기", "지시 완료", "작업완료"] as const;
 const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 /** 5대 업무유형 (통제소 정규화) */
 const TASK_TYPE_OPTIONS = ["광고/마케팅", "콘텐츠/디자인", "고객/예약(CS)", "경영/행정", "플랫폼/IT"] as const;
@@ -100,7 +101,7 @@ export default function TaskTable({
   const [contentPopup, setContentPopup] = useState<TaskRow | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | "작업완료" | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -168,7 +169,7 @@ export default function TaskTable({
     router.refresh();
   }
 
-  // 상태별 개수 (지시 대기 / 지시 완료만)
+  // 상태별 개수 (지시 대기 / 지시 완료 / 작업완료)
   const statusCounts = tasks.reduce((acc, t) => {
     const s = getStatus(t);
     acc[s] = (acc[s] || 0) + 1;
@@ -246,9 +247,10 @@ export default function TaskTable({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">상태</span>
           {[
-            { key: null as "지시 대기" | "지시 완료" | null, label: `전체 (${tasks.length})` },
+            { key: null as "지시 대기" | "지시 완료" | "작업완료" | null, label: `전체 (${tasks.length})` },
             { key: "지시 대기" as const, label: `지시 대기 (${statusCounts["지시 대기"] || 0})` },
             { key: "지시 완료" as const, label: `지시 완료 (${statusCounts["지시 완료"] || 0})` },
+            { key: "작업완료" as const, label: `작업완료 (${statusCounts["작업완료"] || 0})` },
           ].map((item) => (
             <button
               key={item.label}
@@ -328,7 +330,7 @@ export default function TaskTable({
               </tr>
             ) : (
               sorted.map((row) => {
-                const completed = is지시완료(getStatus(row));
+                const completed = statusLabel(getStatus(row)) === "작업완료";
                 return (
                 <tr
                   key={row.id}
@@ -427,6 +429,18 @@ export default function TaskTable({
                   </td>
                   <td className="px-4 py-5">
                     <div className="flex flex-row flex-nowrap items-center gap-3">
+                      {!completed && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await updateStatus(row.id, "작업완료");
+                            setStatusFilter("작업완료");
+                          }}
+                          className="rounded bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                        >
+                          완료
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}

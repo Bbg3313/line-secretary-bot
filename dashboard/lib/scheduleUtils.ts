@@ -75,7 +75,7 @@ export function getDateKeyKST(createdAt: string): string {
 /** 상태값을 '지시 대기' | '지시 완료' 로만 통일 (카운트·필터 공통) */
 export function normalizeTaskStatus(status: string | null | undefined): "지시 대기" | "지시 완료" {
   const s = (status ?? "").trim();
-  if (s === "지시 완료" || s === "완료" || s === "done") return "지시 완료";
+  if (s === "지시 완료" || s === "작업완료" || s === "완료" || s === "done") return "지시 완료";
   return "지시 대기";
 }
 
