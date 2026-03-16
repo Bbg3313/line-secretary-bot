@@ -47,13 +47,13 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
                 e.stopPropagation();
                 if (isClickable && onSelectAssignee) onSelectAssignee(selected ? null : name);
               }}
-              className={`flex flex-col items-center justify-center rounded-xl border py-5 px-4 text-center shadow-sm transition-all w-full min-h-[100px] ${
+              className={`flex flex-col items-center justify-center rounded-xl border py-5 px-4 text-center shadow-sm transition-all duration-200 w-full min-h-[100px] hover:-translate-y-1 hover:shadow-md ${
                 selected
                   ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400/50"
                   : "border-gray-100 bg-slate-50 hover:bg-slate-100 hover:border-gray-200"
               } ${isClickable ? "cursor-pointer" : "cursor-default"}`}
             >
-              <p className="text-3xl font-bold tabular-nums text-orange-500">{count}</p>
+              <p className="text-3xl font-bold tabular-nums text-slate-800">{count}</p>
               <p className="mt-2 text-sm font-medium text-gray-800 leading-snug">{name}</p>
               <span className="mt-1 text-xs text-gray-500">건</span>
             </button>

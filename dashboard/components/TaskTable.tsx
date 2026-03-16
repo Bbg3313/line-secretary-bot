@@ -102,6 +102,7 @@ export default function TaskTable({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   const getStatus = (row: TaskRow) => statusLabel(localStatus[row.id] ?? row.status ?? "지시 대기");
   const getAssignee = (row: TaskRow) =>
@@ -181,8 +182,23 @@ export default function TaskTable({
     return label === statusFilter;
   });
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredBySearch = normalizedSearch
+    ? filteredByStatus.filter((row) => {
+        const hospital = (row.hospital_name || "").toLowerCase();
+        const title = (row.title || "").toLowerCase();
+        const desc = (row.description || "").toLowerCase();
+        return (
+          hospital.includes(normalizedSearch) ||
+          title.includes(normalizedSearch) ||
+          desc.includes(normalizedSearch)
+        );
+      })
+    : filteredByStatus;
+
   // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
-  const sorted = [...filteredByStatus].sort((a, b) => {
+  const sorted = [...filteredBySearch].sort((a, b) => {
     const da = (a.deadline || "").trim();
     const db = (b.deadline || "").trim();
     if (!da && !db) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -225,68 +241,51 @@ export default function TaskTable({
         )}
       </div>
 
-      {/* 퀵 필터 바 */}
-      <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">병원</span>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => onQuickHospitalChange?.(null)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-              !quickHospital ? "bg-gray-200 text-gray-900" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-            }`}
-          >
-            전체
-          </button>
-          {uniqueHospitals.map((h) => (
+      {/* 상태 필터 + 검색바 */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">상태</span>
+          {[
+            { key: null as "지시 대기" | "지시 완료" | null, label: `전체 (${tasks.length})` },
+            { key: "지시 대기" as const, label: `지시 대기 (${statusCounts["지시 대기"] || 0})` },
+            { key: "지시 완료" as const, label: `지시 완료 (${statusCounts["지시 완료"] || 0})` },
+          ].map((item) => (
             <button
-              key={h}
+              key={item.label}
               type="button"
-              onClick={() => onQuickHospitalChange?.(quickHospital === h ? null : h)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                quickHospital === h ? "bg-gray-200 text-gray-900" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              onClick={() => setStatusFilter(item.key)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                statusFilter === item.key
+                  ? "bg-gray-200 text-gray-900"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
               }`}
             >
-              {h}
+              {item.label}
             </button>
           ))}
-        </div>
-        <span className="ml-4 border-l border-gray-200 pl-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</span>
-        <select
-          value={quickTaskType ?? ""}
-          onChange={(e) => onQuickTaskTypeChange?.(e.target.value || null)}
-          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 min-w-[140px]"
-        >
-          <option value="">전체</option>
-          {uniqueTaskTypes.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* 상태 필터: [전체] [지시 대기] [지시 완료] */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 px-1 text-xs text-gray-500">
-        <span className="font-medium">상태</span>
-        {[
-          { key: null as "지시 대기" | "지시 완료" | null, label: `전체 (${tasks.length})` },
-          { key: "지시 대기" as const, label: `지시 대기 (${statusCounts["지시 대기"] || 0})` },
-          { key: "지시 완료" as const, label: `지시 완료 (${statusCounts["지시 완료"] || 0})` },
-        ].map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => setStatusFilter(item.key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              statusFilter === item.key
-                ? "bg-gray-200 text-gray-900"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-            }`}
+          <span className="ml-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</span>
+          <select
+            value={quickTaskType ?? ""}
+            onChange={(e) => onQuickTaskTypeChange?.(e.target.value || null)}
+            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 min-w-[120px]"
           >
-            {item.label}
-          </button>
-        ))}
+            <option value="">전체</option>
+            {uniqueTaskTypes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="병원명·내용 검색"
+            className="w-44 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+          />
+        </div>
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
@@ -328,17 +327,19 @@ export default function TaskTable({
                 </td>
               </tr>
             ) : (
-              sorted.map((row) => (
+              sorted.map((row) => {
+                const completed = is지시완료(getStatus(row));
+                return (
                 <tr
                   key={row.id}
                   className={`border-b border-gray-100 last:border-0 transition hover:bg-slate-50 ${
-                    is지시완료(getStatus(row)) ? "opacity-60 bg-gray-50/50 [&_td]:line-through" : ""
+                    completed ? "opacity-60 bg-gray-50/50" : ""
                   }`}
                 >
-                  <td className="px-4 py-5 font-medium text-gray-900 text-base">
+                  <td className={`px-4 py-5 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className="px-4 py-5 text-gray-700 text-base">
+                  <td className={`px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {row.task_type?.trim() || "개인"}
                   </td>
                   <td className="px-4 py-5">
@@ -412,14 +413,16 @@ export default function TaskTable({
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[260px] px-4 py-5 text-gray-900 text-base">
+                  <td className={`max-w-[260px] px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
-                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${is지시완료(getStatus(row)) ? "opacity-70 text-gray-600" : "font-medium"}`}
+                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${
+                        completed ? "opacity-70 text-gray-600" : "font-medium"
+                      }`}
                       onClick={() => setContentPopup({ title: row.title || "—", description: row.description || "—" })}
                       title="전체 내용 보기"
                     >
-                      <span className="block truncate">{truncatedContent(row)}</span>
+                      <span className={`block truncate ${completed ? "line-through" : ""}`}>{truncatedContent(row)}</span>
                     </button>
                   </td>
                   <td className="px-4 py-5">
@@ -444,7 +447,7 @@ export default function TaskTable({
                     </div>
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>

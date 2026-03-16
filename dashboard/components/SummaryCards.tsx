@@ -69,8 +69,8 @@ export default function SummaryCards({
                   }
                 : undefined
             }
-            className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-150 ${
-              canClick ? "cursor-pointer hover:shadow-md" : ""
+            className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-200 ${
+              canClick ? "cursor-pointer hover:-translate-y-1 hover:shadow-md" : ""
             } ${active ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-50 border-blue-200" : ""}`}
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -82,7 +82,15 @@ export default function SummaryCards({
               )}
             </p>
             <p className="mt-3 flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold tabular-nums text-orange-500">
+              <span
+                className={`text-3xl font-bold tabular-nums ${
+                  card.key === "inbox"
+                    ? "text-blue-600"
+                    : card.key === "in_progress"
+                      ? "text-emerald-500"
+                      : "text-rose-500"
+                }`}
+              >
                 {value}
               </span>
               <span className="text-gray-500">건</span>
