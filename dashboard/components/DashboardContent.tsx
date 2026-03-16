@@ -34,6 +34,7 @@ export default function DashboardContent({
 }: DashboardContentProps) {
   const router = useRouter();
   const [filterMode, setFilterMode] = useState<FilterMode>(null);
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [quickHospital, setQuickHospital] = useState<string | null>(null);
   const [quickTaskType, setQuickTaskType] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -74,8 +75,12 @@ export default function DashboardContent({
     if (quickTaskType) {
       list = list.filter((t) => (t.task_type || "").trim() === quickTaskType);
     }
+    if (assigneeFilter) {
+      const a = (t: TaskRow) => ((t as { assignee?: string | null }).assignee ?? "").trim() || "미정";
+      list = list.filter((t) => a(t) === assigneeFilter);
+    }
     return list;
-  }, [tasks, filterMode, quickHospital, quickTaskType]);
+  }, [tasks, filterMode, assigneeFilter, quickHospital, quickTaskType]);
 
   async function handleDeleteAll() {
     if (!confirm("개발용: tasks 테이블 전체 삭제합니다. 계속할까요?")) return;
@@ -121,6 +126,7 @@ export default function DashboardContent({
           onClearFilter={() => setFilterMode(null)}
           onClearAllFilters={() => {
             setFilterMode(null);
+            setAssigneeFilter(null);
             setQuickHospital(null);
             setQuickTaskType(null);
           }}
