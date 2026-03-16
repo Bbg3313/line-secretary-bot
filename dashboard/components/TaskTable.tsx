@@ -41,8 +41,10 @@ function truncateContent(text: string, maxLen = 80): string {
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
 
-/** 마감기한 셀 (라이트): 지연=빨강+[지연] 뱃지, 오늘=빨강, 촉박=주황, 없으면 기한 없음 */
-function DeadlineCell({ deadline }: { deadline: string | null }) {
+/** 마감기한 셀 (라이트): 지연=빨강+[지연] 뱃지, 오늘=빨강, 촉박=주황, 없으면 기한 없음
+ *  hideStatus가 true이면 [지연]/오늘 뱃지를 숨긴다 (예: 작업완료된 건)
+ */
+function DeadlineCell({ deadline, hideStatus = false }: { deadline: string | null; hideStatus?: boolean }) {
   if (!deadline || !deadline.trim()) {
     return <span className="text-gray-500">기한 없음</span>;
   }
@@ -53,10 +55,10 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
   return (
     <span className={`font-mono ${isOverdue ? "text-red-600" : isToday ? "text-red-600" : isSoon ? "text-amber-600" : "text-gray-700"}`}>
       {text}
-      {isOverdue && (
+      {!hideStatus && isOverdue && (
         <span className="ml-1.5 rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-600 border border-red-200">🚨 [지연]</span>
       )}
-      {isToday && !isOverdue && (
+      {!hideStatus && isToday && !isOverdue && (
         <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">오늘</span>
       )}
     </span>
@@ -406,7 +408,7 @@ export default function TaskTable({
                     </select>
                   </td>
                   <td className="px-4 py-5">
-                    <DeadlineCell deadline={row.deadline} />
+                    <DeadlineCell deadline={row.deadline} hideStatus={completed} />
                   </td>
                   <td className="px-4 py-5">
                     <span
@@ -510,7 +512,10 @@ export default function TaskTable({
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</div>
             <p className="mb-3 text-sm text-gray-700">
               {contentPopup.deadline ? (
-                <DeadlineCell deadline={contentPopup.deadline} />
+                <DeadlineCell
+                  deadline={contentPopup.deadline}
+                  hideStatus={statusLabel(contentPopup.status || "") !== "지시 대기"}
+                />
               ) : (
                 <span className="text-gray-500">기한 없음</span>
               )}
