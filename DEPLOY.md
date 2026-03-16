@@ -4,6 +4,16 @@
 - **대시보드(Vercel)**: 아래 "Vercel 배포 체크리스트"대로 한 번만 설정해 두면, 이후에는 **GitHub에 푸시할 때마다 자동 배포**됨.  
   이미 연결해 뒀다면 → Vercel 대시보드 → 해당 프로젝트 → **Deployments** → **Redeploy** (최신 커밋 기준으로 다시 배포).
 
+## ⚠️ 코드 배포 시 Supabase 스키마도 바뀌었으면 꼭 실행
+
+**코드만 푸시하면 대시보드가 깨질 수 있습니다.** 이번 저장소에 **테이블/컬럼을 추가·변경하는 SQL**이 있으면, 배포 전/후에 **Supabase 대시보드 → SQL Editor**에서 해당 SQL을 한 번 실행해야 합니다.
+
+- **지금 필요한 SQL**  
+  - `tasks` 테이블에 **담당자(assignee)** 컬럼 추가:  
+    프로젝트의 **`supabase_migration_assignee.sql`** 내용을 복사해 SQL Editor에 붙여넣고 **Run**.
+- **앞으로**  
+  - `supabase_*.sql` 이나 `*_migration_*.sql` 같은 파일이 추가/수정되면, **DEPLOY.md** 이 섹션에 "어떤 SQL을 언제 실행할지" 적어 둡니다. 배포할 때마다 이 문서를 보고 Supabase에서 실행하면 됩니다.
+
 ---
 
 # Vercel 배포 체크리스트
@@ -30,11 +40,16 @@
   - Name: `NEXT_PUBLIC_SUPABASE_ANON_KEY`  
     Value: Supabase **anon key** (Project Settings → API → anon public)
 
-## 4. Supabase RLS 정책 (필수 — 안 하면 대시보드에 데이터 0건)
+## 4. Supabase: RLS 정책 + 스키마(컬럼) (필수 — 안 하면 대시보드 오류)
 
 - Supabase 대시보드 → **SQL Editor** → **New query**
-- 프로젝트 루트의 `supabase_rls_policies.sql` 내용 전체 복사 후 붙여넣기 → **Run**
-- 이렇게 해야 Vercel 대시보드(anon 키)가 `chats` / `tasks` 테이블을 조회·수정할 수 있습니다.
+- **4-1. RLS 정책**  
+  프로젝트 루트의 **`supabase_rls_policies.sql`** 내용 전체 복사 후 붙여넣기 → **Run**.  
+  이렇게 해야 Vercel 대시보드(anon 키)가 `chats` / `tasks` 테이블을 조회·수정할 수 있습니다.
+- **4-2. 스키마(컬럼) 변경이 있을 때**  
+  저장소에 `supabase_migration_*.sql` 이나 `supabase_tasks_table.sql` 같은 **테이블/컬럼 추가·변경 SQL**이 있으면, 그 내용도 **같이 실행**해야 합니다.  
+  예: `tasks`에 담당자 컬럼이 필요하면 **`supabase_migration_assignee.sql`** 내용을 복사해 SQL Editor에서 실행.  
+  (자세한 안내는 이 문서 맨 위 "코드 배포 시 Supabase 스키마도 바뀌었으면 꼭 실행" 참고.)
 
 ## 5. 배포
 

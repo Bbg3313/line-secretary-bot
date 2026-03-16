@@ -11,6 +11,7 @@ create table if not exists public.tasks (
   deadline timestamptz,
   description text,
   status text not null default '대기',
+  assignee text,
   created_at timestamptz default now()
 );
 
@@ -18,6 +19,8 @@ create table if not exists public.tasks (
 alter table public.tasks add column if not exists description text;
 -- title 컬럼이 있으면 유지 (호환), 없으면 description로 표시
 alter table public.tasks add column if not exists title text;
+-- 담당자 (미정이면 null 또는 '미정')
+alter table public.tasks add column if not exists assignee text;
 
 -- RLS: 대시보드 anon 키로 조회·수정 가능 (필요 시 아래 두 줄 실행)
 -- alter table public.tasks enable row level security;

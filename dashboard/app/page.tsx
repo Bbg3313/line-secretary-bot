@@ -38,60 +38,52 @@ export default async function DashboardPage() {
   const tasks = tasksRes.data;
   const supabaseError = chatsRes.error || tasksRes.error;
 
-  const isDone = (s: string | undefined) => s === "완료" || s === "done";
-  const getAssignee = (t: TaskRow) => ((t as any).assignee as string | null | undefined)?.trim() || "미정";
+  // 상태 정규화: 오직 지시 대기 / 지시 완료
+  const normalStatus = (s: string | undefined) =>
+    s === "지시 완료" || s === "완료" || s === "done" ? "지시 완료" : "지시 대기";
 
-  // 1) 지시 대기 (Inbox): 담당자가 '미정'인 모든 업무
-  const inboxCount = tasks.filter((t) => getAssignee(t) === "미정").length;
-
-  // 2) 실무 진행 중: 담당자 지정됨 + 완료가 아님
-  const inProgressCount = tasks.filter(
-    (t) => getAssignee(t) !== "미정" && !isDone(t?.status)
-  ).length;
-
-  // 3) 긴급 및 지연: status가 '긴급' 이거나, 마감일이 오늘보다 과거인데 완료가 아님
+  // 1) 지시 대기 2) 지시 완료 3) 지연된 지시 (지시 대기 중 마감 지남)
+  const inboxCount = tasks.filter((t) => normalStatus(t?.status) === "지시 대기").length;
+  const inProgressCount = tasks.filter((t) => normalStatus(t?.status) === "지시 완료").length;
   const urgentOverdueCount = tasks.filter((t) => {
-    const status = t?.status;
+    if (normalStatus(t?.status) !== "지시 대기") return false;
     const deadline = t?.deadline ?? null;
-    const done = isDone(status);
-    const isUrgentStatus = status === "긴급";
-    const isOverdue = !done && !!deadline && isDeadlineOverdueKST(deadline);
-    return isUrgentStatus || isOverdue;
+    return !!deadline && isDeadlineOverdueKST(deadline);
   }).length;
 
   return (
     <main className="space-y-10">
       {!hasSupabaseConfig && (
-        <section className="rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-amber-200">
-          <p className="font-medium">Supabase 연결 안 됨</p>
-          <p className="mt-1 text-sm">
-            Vercel 프로젝트 설정 → Environment Variables에 <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-            <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>를 넣고 저장한 뒤 <strong>Redeploy</strong> 해 주세요.
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <p className="font-medium text-amber-800">Supabase 연결 안 됨</p>
+          <p className="mt-1 text-sm text-amber-700">
+            Vercel 프로젝트 설정 → Environment Variables에 <code className="rounded bg-amber-100 px-1 text-amber-900">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+            <code className="rounded bg-amber-100 px-1 text-amber-900">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>를 넣고 저장한 뒤 <strong>Redeploy</strong> 해 주세요.
           </p>
         </section>
       )}
       {hasSupabaseConfig && supabaseError && (
-        <section className="rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-3 text-red-200">
-          <p className="font-medium">Supabase 조회 오류</p>
-          <p className="mt-1 text-sm">
-            {supabaseError} — Supabase 대시보드에서 <code className="rounded bg-black/30 px-1">supabase_rls_policies.sql</code>을 실행했는지 확인하고, anon key가 맞는지 확인해 주세요.
+        <section className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm">
+          <p className="font-medium text-red-800">Supabase 조회 오류</p>
+          <p className="mt-1 text-sm text-red-700">
+            {supabaseError} — Supabase 대시보드에서 <code className="rounded bg-red-100 px-1 text-red-900">supabase_rls_policies.sql</code>을 실행했는지 확인하고, anon key가 맞는지 확인해 주세요.
           </p>
         </section>
       )}
       {hasSupabaseConfig && tasks.length === 0 && !supabaseError && (
-        <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-amber-200/90">
-          <p className="font-medium">데이터가 안 보일 때 확인</p>
-          <p className="mt-1 text-sm">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/50 px-4 py-3 shadow-sm">
+          <p className="font-medium text-gray-900">데이터가 안 보일 때 확인</p>
+          <p className="mt-1 text-sm text-gray-600">
             Supabase Table Editor에는 있는데 여기만 비어 있으면 → <strong>Vercel 환경 변수</strong>가 같은 프로젝트를 가리키는지 확인하세요.
           </p>
-          <ul className="mt-2 list-inside list-disc text-sm">
-            <li>Vercel 프로젝트 → Settings → Environment Variables에 <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> 입력
+          <ul className="mt-2 list-inside list-disc text-sm text-gray-600">
+            <li>Vercel 프로젝트 → Settings → Environment Variables에 <code className="rounded bg-gray-100 px-1 text-gray-800">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="rounded bg-gray-100 px-1 text-gray-800">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> 입력
             </li>
             <li>값 수정 후 반드시 <strong>Redeploy</strong> (NEXT_PUBLIC_* 는 빌드 시 적용됨)
             </li>
-            <li>연결 중인 URL: <code className="break-all text-xs opacity-80">{supabaseUrlPrefix || "(비어 있음)"}</code> — Supabase 대시보드 Project URL과 앞부분이 같아야 함
+            <li>연결 중인 URL: <code className="break-all text-xs text-gray-500">{supabaseUrlPrefix || "(비어 있음)"}</code> — Supabase 대시보드 Project URL과 앞부분이 같아야 함
             </li>
-            <li>같은 프로젝트에서 <code className="rounded bg-black/30 px-1">supabase_rls_policies.sql</code> 실행했는지 확인
+            <li>같은 프로젝트에서 <code className="rounded bg-gray-100 px-1 text-gray-800">supabase_rls_policies.sql</code> 실행했는지 확인
             </li>
           </ul>
         </section>

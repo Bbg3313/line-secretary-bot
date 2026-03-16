@@ -9,6 +9,30 @@ export type SummaryCardsProps = {
   onClearFilter?: () => void;
 };
 
+const CARD_CONFIG = [
+  {
+    key: "inbox" as const,
+    label: "지시 대기",
+    icon: "📥",
+    iconBg: "bg-blue-50",
+    iconColor: "text-blue-500",
+  },
+  {
+    key: "in_progress" as const,
+    label: "지시 완료",
+    icon: "🚀",
+    iconBg: "bg-orange-50",
+    iconColor: "text-orange-500",
+  },
+  {
+    key: "urgent_overdue" as const,
+    label: "지연된 지시",
+    icon: "🚨",
+    iconBg: "bg-red-50",
+    iconColor: "text-red-500",
+  },
+] as const;
+
 export default function SummaryCards({
   inboxCount,
   inProgressCount,
@@ -17,23 +41,12 @@ export default function SummaryCards({
   onFilter,
   onClearFilter,
 }: SummaryCardsProps) {
-  const cards: {
-    key: "inbox" | "in_progress" | "urgent_overdue";
-    label: string;
-    value: number;
-    unit: string;
-    icon: string;
-    className: string;
-    valueClass: string;
-  }[] = [
-    { key: "inbox", label: "지시 대기 (Inbox)", value: inboxCount, unit: "건", icon: "📥", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
-    { key: "in_progress", label: "실무 진행 중 (In Progress)", value: inProgressCount, unit: "건", icon: "🏃‍♂️", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
-    { key: "urgent_overdue", label: "긴급 및 지연 (Urgent/Overdue)", value: urgentOverdueCount, unit: "건", icon: "🚨", className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30", valueClass: "text-amber-300" },
-  ];
+  const values = { inbox: inboxCount, in_progress: inProgressCount, urgent_overdue: urgentOverdueCount };
 
   return (
     <div className="grid gap-5 sm:grid-cols-3">
-      {cards.map((card) => {
+      {CARD_CONFIG.map((card) => {
+        const value = values[card.key];
         const active = filterMode === card.key;
         const canClick = Boolean(onFilter || onClearFilter);
         const handleClick = () => {
@@ -56,31 +69,27 @@ export default function SummaryCards({
                   }
                 : undefined
             }
-            className={`rounded-xl border ${card.className} p-6 shadow-lg transition-transform transition-colors duration-150 ${
-              canClick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-xl" : ""
-            } ${
-              active
-                ? "border-emerald-400 ring-2 ring-emerald-500/60 ring-offset-2 ring-offset-[#0f172a]"
-                : ""
-            }`}
+            className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-150 ${
+              canClick ? "cursor-pointer hover:shadow-md" : ""
+            } ${active ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-50 border-blue-200" : ""}`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {card.label}
               {active && onClearFilter && (
-                <span className="ml-2 text-emerald-400">
+                <span className="ml-2 text-blue-500">
                   · 필터 적용 중 <button type="button" className="underline" onClick={(e) => { e.stopPropagation(); onClearFilter(); }}>해제</button>
                 </span>
               )}
             </p>
             <p className="mt-3 flex items-baseline gap-1.5">
-              <span className={`text-3xl font-bold tabular-nums ${card.valueClass}`}>
-                {card.value}
+              <span className="text-3xl font-bold tabular-nums text-orange-500">
+                {value}
               </span>
-              <span className="text-slate-500">{card.unit}</span>
+              <span className="text-gray-500">건</span>
             </p>
-            <span className="mt-3 block text-2xl opacity-70" aria-hidden>
+            <div className={`mt-3 inline-flex h-12 w-12 items-center justify-center rounded-lg p-3 ${card.iconBg} ${card.iconColor} text-2xl`} aria-hidden>
               {card.icon}
-            </span>
+            </div>
           </div>
         );
       })}

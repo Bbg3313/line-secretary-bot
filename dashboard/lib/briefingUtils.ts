@@ -1,8 +1,8 @@
 import type { TaskRow } from "./supabase";
 import { isDeadlineTodayKST, isDeadlineTomorrowKST } from "./scheduleUtils";
 
-function isDone(s: string | undefined): boolean {
-  return s === "완료" || s === "done";
+function is지시완료(s: string | undefined): boolean {
+  return s === "지시 완료" || s === "완료" || s === "done";
 }
 
 /**
@@ -14,7 +14,7 @@ export function generateBriefingFromTasks(tasks: TaskRow[]): string {
     return "대표님, 현재 표시된 업무가 없습니다.";
   }
 
-  const active = tasks.filter((t) => !isDone(t?.status));
+  const active = tasks.filter((t) => !is지시완료(t?.status));
   const tomorrow = active.filter((t) => isDeadlineTomorrowKST(t?.deadline ?? null));
   const today = active.filter((t) => isDeadlineTodayKST(t?.deadline ?? null));
   const noDeadline = active.filter((t) => !(t?.deadline || "").trim());

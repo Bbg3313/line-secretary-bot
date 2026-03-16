@@ -249,30 +249,10 @@ TASK_TYPES_ALLOWED = frozenset(TASK_TYPE_CATEGORIES)
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
 
-_URGENT_KEYWORDS = (
-    "긴급", "급하게", "급한", "asap", "ASAP",
-    "지금 바로", "바로 처리", "최대한 빨리", "오늘 안에", "오늘안에",
-)
-_IN_PROGRESS_KEYWORDS = (
-    "진행중", "진행 중", "작업중", "작업 중", "하고있", "하고 있",
-)
-
-
-def _infer_status(title: str, desc: str, deadline_ymd: str | None, today: date) -> str:
-    """내용·마감 기준으로 초기 status 추론."""
-    text = f"{title} {desc}".lower()
-    if any(k.lower() in text for k in _URGENT_KEYWORDS):
-        return "긴급"
-    if any(k.lower() in text for k in _IN_PROGRESS_KEYWORDS):
-        return "진행중"
-    if deadline_ymd:
-        try:
-            d = datetime.strptime(deadline_ymd, "%Y-%m-%d").date()
-            if d <= today:
-                return "긴급"
-        except Exception:
-            pass
-    return "대기"
+# 상태는 오직 두 가지: 지시 대기 / 지시 완료 (대시보드에서 담당자 지정 시 지시 완료로 전환)
+def _infer_status(_title: str, _desc: str, _deadline_ymd: str | None, _today: date) -> str:
+    """신규 업무는 항상 지시 대기. 담당자 지정 시 대시보드에서 지시 완료로 변경됨."""
+    return "지시 대기"
 
 
 def analyze_and_extract(text: str) -> tuple[str, list[dict]]:

@@ -29,12 +29,9 @@ type DashboardContentProps = {
   supabaseError?: string;
 };
 
-function isDone(s: string | undefined) {
-  return s === "완료" || s === "done";
-}
-
-function getAssignee(t: TaskRow) {
-  return ((t as any).assignee as string | null | undefined)?.trim() || "미정";
+// 상태 정규화: 지시 대기 / 지시 완료만
+function normalStatus(s: string | undefined) {
+  return s === "지시 완료" || s === "완료" || s === "done" ? "지시 완료" : "지시 대기";
 }
 
 export default function DashboardContent({
@@ -57,17 +54,14 @@ export default function DashboardContent({
   const tasksToShow = useMemo(() => {
     let list = tasks;
     if (filterMode === "inbox") {
-      list = list.filter((t) => getAssignee(t) === "미정");
+      list = list.filter((t) => normalStatus(t?.status) === "지시 대기");
     } else if (filterMode === "in_progress") {
-      list = list.filter((t) => getAssignee(t) !== "미정" && !isDone(t?.status));
+      list = list.filter((t) => normalStatus(t?.status) === "지시 완료");
     } else if (filterMode === "urgent_overdue") {
       list = list.filter((t) => {
-        const status = t?.status;
+        if (normalStatus(t?.status) !== "지시 대기") return false;
         const deadline = t?.deadline ?? null;
-        const done = isDone(status);
-        const isUrgent = status === "긴급";
-        const isOverdue = !done && !!deadline && isDeadlineOverdueKST(deadline);
-        return isUrgent || isOverdue;
+        return !!deadline && isDeadlineOverdueKST(deadline);
       });
     }
     if (quickHospital) {
@@ -142,7 +136,7 @@ export default function DashboardContent({
           type="button"
           onClick={handleDeleteAll}
           disabled={deleting}
-          className="rounded border border-red-500/60 bg-red-950/80 px-3 py-1.5 text-xs text-red-300 hover:bg-red-900/60 disabled:opacity-50"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
         >
           {deleting ? "삭제 중…" : "전체 삭제 (개발용)"}
         </button>

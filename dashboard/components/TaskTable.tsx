@@ -11,23 +11,21 @@ import {
   isDeadlineOverdueKST,
 } from "@/lib/scheduleUtils";
 
+/** 상태는 오직 두 가지: 지시 대기 / 지시 완료 (기존 DB 값은 여기서 정규화) */
 function statusLabel(s: string): string {
-  if (s === "완료" || s === "done") return "완료";
-  if (s === "진행중" || s === "in_progress") return "진행중";
-  if (s === "긴급") return "긴급";
-  return "대기";
+  if (s === "지시 완료") return "지시 완료";
+  if (s === "완료" || s === "done") return "지시 완료";
+  return "지시 대기";
 }
 
-function isDone(s: string): boolean {
-  return s === "완료" || s === "done";
+function is지시완료(s: string): boolean {
+  return statusLabel(s) === "지시 완료";
 }
 
-/** 상태 뱃지 컬러: 대기=연한파랑, 진행중=주황(Warning), 완료=초록(Success), 긴급=빨강(Danger) */
+/** 상태 뱃지 (라이트): 지시 대기 = 회색/빨강 파스텔, 지시 완료 = 초록 파스텔 */
 function statusBadgeClass(s: string): string {
-  if (isDone(s)) return "bg-emerald-600/25 text-emerald-200 border border-emerald-500/50 font-medium";
-  if (s === "진행중" || s === "in_progress") return "bg-amber-500/30 text-amber-200 border border-amber-500/50 font-medium";
-  if (s === "긴급") return "bg-red-600/30 text-red-200 border border-red-500/50 font-medium";
-  return "bg-slate-500/20 text-slate-300 border border-slate-500/40 font-medium";
+  if (is지시완료(s)) return "bg-emerald-50 text-emerald-600 border border-emerald-200 font-medium";
+  return "bg-red-50 text-red-600 border border-red-200 font-medium";
 }
 
 /** 내용 maxLen자까지만 보여주고 나머지는 말줄임 */
@@ -41,29 +39,29 @@ function truncateContent(text: string, maxLen = 80): string {
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
 
-/** 마감기한 셀: 지연=빨강+[지연] 뱃지, 오늘=빨강+[오늘], 촉박=주황, 없으면 기한 없음 */
+/** 마감기한 셀 (라이트): 지연=빨강+[지연] 뱃지, 오늘=빨강, 촉박=주황, 없으면 기한 없음 */
 function DeadlineCell({ deadline }: { deadline: string | null }) {
   if (!deadline || !deadline.trim()) {
-    return <span className="text-slate-500">기한 없음</span>;
+    return <span className="text-gray-500">기한 없음</span>;
   }
   const text = formatDeadlineWithWeekday(deadline) || deadline.slice(0, 10);
   const isOverdue = isDeadlineOverdueKST(deadline);
   const isToday = isDeadlineTodayKST(deadline);
   const isSoon = !isOverdue && !isToday && isDeadlineSoonKST(deadline, 2);
   return (
-    <span className={`font-mono ${isOverdue ? "text-red-400" : isToday ? "text-red-400" : isSoon ? "text-amber-400" : "text-slate-300"}`}>
+    <span className={`font-mono ${isOverdue ? "text-red-600" : isToday ? "text-red-600" : isSoon ? "text-amber-600" : "text-gray-700"}`}>
       {text}
       {isOverdue && (
-        <span className="ml-1.5 rounded bg-red-600/50 px-1.5 py-0.5 text-xs font-semibold text-red-200">🚨 [지연]</span>
+        <span className="ml-1.5 rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-600 border border-red-200">🚨 [지연]</span>
       )}
       {isToday && !isOverdue && (
-        <span className="ml-1.5 rounded bg-red-500/30 px-1.5 py-0.5 text-xs font-medium text-red-300">오늘</span>
+        <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">오늘</span>
       )}
     </span>
   );
 }
 
-const STATUS_OPTIONS = ["대기", "진행중", "완료"] as const;
+const STATUS_OPTIONS = ["지시 대기", "지시 완료"] as const;
 const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 /** 5대 업무유형 (통제소 정규화) */
 const TASK_TYPE_OPTIONS = ["광고/마케팅", "콘텐츠/디자인", "고객/예약(CS)", "경영/행정", "플랫폼/IT"] as const;
@@ -101,14 +99,13 @@ export default function TaskTable({
   const [contentPopup, setContentPopup] = useState<{ title: string; description: string } | null>(null);
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"대기" | "진행중" | "완료" | "긴급" | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
+  const getStatus = (row: TaskRow) => statusLabel(localStatus[row.id] ?? row.status ?? "지시 대기");
   const getAssignee = (row: TaskRow) =>
     localAssignee[row.id] ??
-    ((row as any).assignee as string | null | undefined) ??
-    "미정";
+    (((row as any).assignee as string | null | undefined)?.trim() || "미정");
 
   async function updateStatus(id: string, next: string) {
     setLocalStatus((prev) => ({ ...prev, [id]: next }));
@@ -169,28 +166,17 @@ export default function TaskTable({
     router.refresh();
   }
 
-  // 상태별 개수 (상태 탭 표시용) — 로컬 상태 반영해서 드롭다운 변경 시 즉시 숫자 갱신
+  // 상태별 개수 (지시 대기 / 지시 완료만)
   const statusCounts = tasks.reduce((acc, t) => {
-    const s = statusLabel(getStatus(t));
+    const s = getStatus(t);
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  const activeTotal =
-    (statusCounts["대기"] || 0) +
-    (statusCounts["진행중"] || 0) +
-    (statusCounts["긴급"] || 0);
 
-  // 상태 필터 적용 — getStatus 사용해서 드롭다운 변경 직후 필터에도 반영
-  // 요구사항: "완료" 상태는 기본(전체) 목록에서는 숨기고, "완료" 탭에서만 보여준다.
+  // 상태 필터: [전체] [지시 대기] [지시 완료]
   const filteredByStatus = tasks.filter((t) => {
-    const label = statusLabel(getStatus(t));
-    // 완료 탭: 완료만
-    if (statusFilter === "완료") return label === "완료";
-    // 나머지 탭 / 전체: 완료는 항상 숨김
-    if (label === "완료") return false;
-    // 전체 탭(null)이면 완료를 제외한 모든 상태 노출
+    const label = getStatus(t);
     if (!statusFilter) return true;
-    // 특정 상태 탭이면 해당 상태만
     return label === statusFilter;
   });
 
@@ -217,36 +203,36 @@ export default function TaskTable({
 
   const filterLabel =
     filterMode === "inbox"
-      ? "지시 대기 (Inbox)"
+      ? "지시 대기"
       : filterMode === "in_progress"
-        ? "실무 진행 중 (In Progress)"
+        ? "지시 완료"
         : filterMode === "urgent_overdue"
-          ? "긴급 및 지연 (Urgent/Overdue)"
+          ? "지연된 지시"
           : null;
 
   return (
-    <section className="rounded-xl border border-slate-600/80 bg-[#1e293b] p-6 shadow-xl">
+    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+        <h2 className="flex items-center gap-2 text-xl font-semibold text-gray-900">
           <span className="text-2xl" aria-hidden>📋</span>
           업무 관리
         </h2>
         {filterLabel && onClearFilter && (
-          <span className="rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300">
+          <span className="rounded-md bg-blue-50 px-3 py-1 text-sm text-blue-600 border border-blue-100">
             {filterLabel} 필터 적용 중 <button type="button" className="ml-1 font-medium underline hover:no-underline" onClick={onClearFilter}>해제</button>
           </span>
         )}
       </div>
 
       {/* 퀵 필터 바 */}
-      <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-slate-600/60 bg-slate-800/20 px-4 py-3">
-        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">병원</span>
+      <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">병원</span>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => onQuickHospitalChange?.(null)}
             className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-              !quickHospital ? "bg-slate-600 text-white" : "bg-slate-700/60 text-slate-400 hover:bg-slate-600/80 hover:text-slate-200"
+              !quickHospital ? "bg-gray-200 text-gray-900" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             }`}
           >
             전체
@@ -257,18 +243,18 @@ export default function TaskTable({
               type="button"
               onClick={() => onQuickHospitalChange?.(quickHospital === h ? null : h)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                quickHospital === h ? "bg-slate-600 text-white" : "bg-slate-700/60 text-slate-400 hover:bg-slate-600/80 hover:text-slate-200"
+                quickHospital === h ? "bg-gray-200 text-gray-900" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
               }`}
             >
               {h}
             </button>
           ))}
         </div>
-        <span className="ml-4 border-l border-slate-600/60 pl-4 text-xs font-medium uppercase tracking-wider text-slate-500">업무유형</span>
+        <span className="ml-4 border-l border-gray-200 pl-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</span>
         <select
           value={quickTaskType ?? ""}
           onChange={(e) => onQuickTaskTypeChange?.(e.target.value || null)}
-          className="rounded-md border border-slate-600 bg-slate-700/80 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 min-w-[140px]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 min-w-[140px]"
         >
           <option value="">전체</option>
           {uniqueTaskTypes.map((t) => (
@@ -279,18 +265,13 @@ export default function TaskTable({
         </select>
       </div>
 
-      {/* 상태 탭 */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-400">
+      {/* 상태 필터: [전체] [지시 대기] [지시 완료] */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 px-1 text-xs text-gray-500">
         <span className="font-medium">상태</span>
         {[
-          {
-            key: null as "대기" | "진행중" | "완료" | "긴급" | null,
-            label: `전체 (${activeTotal})`,
-          },
-          { key: "대기" as const, label: `대기 (${statusCounts["대기"] || 0})` },
-          { key: "진행중" as const, label: `진행중 (${statusCounts["진행중"] || 0})` },
-          { key: "완료" as const, label: `완료 (${statusCounts["완료"] || 0})` },
-          { key: "긴급" as const, label: `긴급 (${statusCounts["긴급"] || 0})` },
+          { key: null as "지시 대기" | "지시 완료" | null, label: `전체 (${tasks.length})` },
+          { key: "지시 대기" as const, label: `지시 대기 (${statusCounts["지시 대기"] || 0})` },
+          { key: "지시 완료" as const, label: `지시 완료 (${statusCounts["지시 완료"] || 0})` },
         ].map((item) => (
           <button
             key={item.label}
@@ -298,8 +279,8 @@ export default function TaskTable({
             onClick={() => setStatusFilter(item.key)}
             className={`rounded-full px-3 py-1 text-xs font-medium transition ${
               statusFilter === item.key
-                ? "bg-slate-100 text-slate-900"
-                : "bg-slate-700/40 text-slate-300 hover:bg-slate-600/60"
+                ? "bg-gray-200 text-gray-900"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
             }`}
           >
             {item.label}
@@ -307,17 +288,17 @@ export default function TaskTable({
         ))}
       </div>
 
-      <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-slate-600/60 bg-slate-800/30 scrollbar-thin">
+      <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
         <table className="w-full min-w-[900px] text-left text-base">
           <thead>
-            <tr className="border-b border-slate-600/80 bg-slate-700/40">
-              <th className="min-w-[100px] px-4 py-4 font-medium text-slate-400">병원명</th>
-              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">업무유형</th>
-              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">담당자</th>
-              <th className="min-w-[90px] px-4 py-4 font-medium text-slate-400">마감기한</th>
-              <th className="min-w-[80px] px-4 py-4 font-medium text-slate-400">상태</th>
-              <th className="px-4 py-4 font-medium text-slate-400">내용</th>
-              <th className="w-24 px-4 py-4 font-medium text-slate-400">관리</th>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="min-w-[100px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
+              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
+              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
+              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</th>
+              <th className="min-w-[80px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
+              <th className="px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
+              <th className="w-24 px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -325,21 +306,21 @@ export default function TaskTable({
               <tr>
                 <td colSpan={7} className="py-12 text-center">
                   {totalTaskCount > 0 ? (
-                    <div className="text-slate-400">
+                    <div className="text-gray-500">
                       <p className="font-medium">필터 조건에 맞는 업무가 없어요.</p>
                       <p className="mt-1 text-sm">필터를 해제하면 전체 목록을 볼 수 있어요.</p>
                       {onClearAllFilters && (
                         <button
                           type="button"
                           onClick={onClearAllFilters}
-                          className="mt-3 rounded-md bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500"
+                          className="mt-3 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-300"
                         >
                           필터 모두 해제
                         </button>
                       )}
                     </div>
                   ) : (
-                    <p className="text-slate-500">
+                    <p className="text-gray-500">
                       아직 수집된 업무가 없어요. LINE 채팅에 할 일을 보내면 개별 업무로 쪼개져 저장돼요.
                     </p>
                   )}
@@ -349,14 +330,14 @@ export default function TaskTable({
               sorted.map((row) => (
                 <tr
                   key={row.id}
-                  className={`border-b border-slate-600/50 last:border-0 transition hover:bg-slate-700/50 ${
-                    isDone(getStatus(row)) ? "opacity-50 bg-slate-800/40 [&_td]:line-through" : ""
+                  className={`border-b border-gray-100 last:border-0 transition hover:bg-slate-50 ${
+                    is지시완료(getStatus(row)) ? "opacity-60 bg-gray-50/50 [&_td]:line-through" : ""
                   }`}
                 >
-                  <td className="px-4 py-5 font-medium text-slate-200 text-base">
+                  <td className="px-4 py-5 font-medium text-gray-900 text-base">
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className="px-4 py-5 text-slate-300 text-base">
+                  <td className="px-4 py-5 text-gray-700 text-base">
                     {row.task_type?.trim() || "개인"}
                   </td>
                   <td className="px-4 py-5">
@@ -365,35 +346,17 @@ export default function TaskTable({
                       onChange={async (e) => {
                         const next = e.target.value;
                         const prevAssignee = getAssignee(row);
-                        const prevStatusLabel = statusLabel(getStatus(row));
-                        let nextStatus: string | null = null;
-
-                        // 스마트 상태 연동:
-                        // - 이전 담당자가 미정이었고
-                        // - 새 담당자가 미정이 아니며
-                        // - 현재 상태가 대기인 경우에만 -> 진행중으로 변경
-                        if (
-                          prevAssignee === "미정" &&
-                          next !== "미정" &&
-                          prevStatusLabel === "대기"
-                        ) {
-                          nextStatus = "진행중";
-                        }
+                        // 담당자 변경 시 상태 자동 연동: 미정 → 지시 대기, 지정 → 지시 완료
+                        const nextStatus = next === "미정" ? "지시 대기" : "지시 완료";
 
                         setLocalAssignee((prev) => ({ ...prev, [row.id]: next }));
-                        if (nextStatus) {
-                          setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus! }));
-                        }
+                        setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus }));
 
-                        const payload: Record<string, string> = { assignee: next };
-                        if (nextStatus) {
-                          payload.status = nextStatus;
-                        }
+                        const payload = { assignee: next, status: nextStatus };
 
                         const { error } = await supabase.from("tasks").update(payload).eq("id", row.id);
                         if (error) {
                           console.error(error);
-                          // 아직 Supabase tasks 테이블에 assignee/status 컬럼이 없으면 경고만 찍고 UI는 유지
                           if (
                             String(error.message || "").includes("assignee") ||
                             String(error.message || "").includes("status")
@@ -409,25 +372,24 @@ export default function TaskTable({
                             delete u[row.id];
                             return u;
                           });
-                          if (nextStatus) {
-                            setLocalStatus((prev) => {
-                              const u = { ...prev };
-                              delete u[row.id];
-                              return u;
-                            });
-                          }
+                          setLocalStatus((prev) => {
+                            const u = { ...prev };
+                            delete u[row.id];
+                            return u;
+                          });
                           return;
                         }
-                        if (prevAssignee === "미정" && next !== "미정") {
-                          setToastMessage(`🚀 ${next}님에게 업무가 배정되었습니다.`);
+                        // 담당자가 A→B로 변경될 때마다 무조건 토스트
+                        if (prevAssignee !== next) {
+                          setToastMessage(`🚀 ${next}님에게 업무가 배정(변경)되었습니다.`);
                           setTimeout(() => setToastMessage(null), 3000);
                         }
                         router.refresh();
                       }}
-                      className="min-w-[150px] rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      className="min-w-[150px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                     >
                       {ASSIGNEE_OPTIONS.map((a) => (
-                        <option key={a} value={a} className="bg-slate-800 text-slate-100">
+                        <option key={a} value={a}>
                           {a}
                         </option>
                       ))}
@@ -443,10 +405,10 @@ export default function TaskTable({
                       {statusLabel(getStatus(row))}
                     </span>
                   </td>
-                  <td className="max-w-[260px] px-4 py-5 text-slate-200 text-base">
+                  <td className="max-w-[260px] px-4 py-5 text-gray-900 text-base">
                     <button
                       type="button"
-                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${isDone(getStatus(row)) ? "opacity-80" : "font-medium"}`}
+                      className={`max-w-full cursor-pointer text-left hover:underline focus:underline focus:outline-none ${is지시완료(getStatus(row)) ? "opacity-70 text-gray-600" : "font-medium"}`}
                       onClick={() => setContentPopup({ title: row.title || "—", description: row.description || "—" })}
                       title="전체 내용 보기"
                     >
@@ -458,7 +420,7 @@ export default function TaskTable({
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}
-                        className="rounded p-2 text-slate-300 transition-colors duration-150 hover:bg-slate-600/60 hover:text-emerald-300"
+                        className="rounded p-2 text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-emerald-600"
                         title="수정"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -467,7 +429,7 @@ export default function TaskTable({
                         type="button"
                         onClick={() => handleDelete(row.id)}
                         disabled={deletingId === row.id}
-                        className="rounded p-2 text-slate-300 transition-colors duration-150 hover:bg-red-500/25 hover:text-red-400 disabled:opacity-50"
+                        className="rounded p-2 text-gray-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                         title="삭제"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -483,24 +445,24 @@ export default function TaskTable({
 
       {contentPopup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={() => setContentPopup(null)}
           role="dialog"
           aria-modal="true"
           aria-label="전체 내용"
         >
           <div
-            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-xl border border-slate-600 bg-slate-800 p-6 shadow-xl"
+            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-2 text-sm font-medium text-slate-400">제목</div>
-            <p className="mb-4 text-slate-200">{contentPopup.title}</p>
-            <div className="mb-2 text-sm font-medium text-slate-400">내용</div>
-            <p className="whitespace-pre-wrap text-slate-200">{contentPopup.description}</p>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500">제목</div>
+            <p className="mb-4 text-gray-900">{contentPopup.title}</p>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500">내용</div>
+            <p className="whitespace-pre-wrap text-gray-700">{contentPopup.description}</p>
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
-                className="rounded bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500"
+                className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 onClick={() => setContentPopup(null)}
               >
                 닫기
@@ -520,7 +482,7 @@ export default function TaskTable({
 
       {toastMessage && (
         <div
-          className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-emerald-500/40 bg-slate-800 px-6 py-3 text-sm font-medium text-emerald-100 shadow-lg ring-1 ring-emerald-500/20"
+          className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-emerald-200 bg-white px-6 py-3 text-sm font-medium text-emerald-700 shadow-sm"
           role="status"
           aria-live="polite"
         >
@@ -558,9 +520,11 @@ function EditTaskModal({
   const [assignee, setAssignee] = useState<string>(
     ((row as any).assignee as string | null | undefined) || "미정",
   );
-  const [status, setStatus] = useState(row.status || "대기");
   const [title, setTitle] = useState(row.title?.trim() || "");
   const [description, setDescription] = useState(row.description?.trim() || "");
+
+  // 상태는 담당자에 따라 자동: 미정 → 지시 대기, 지정 → 지시 완료
+  const derivedStatus = (assignee?.trim() || "미정") === "미정" ? "지시 대기" : "지시 완료";
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -569,7 +533,7 @@ function EditTaskModal({
       task_type: task_type.trim() || TASK_TYPE_OPTIONS[0],
       deadline: deadline.trim() || null,
       assignee: assignee.trim() || "미정",
-      status,
+      status: derivedStatus,
       title: title.trim() || description.slice(0, 50),
       description: description.trim() || title.trim() || "업무",
     });
@@ -577,33 +541,33 @@ function EditTaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="업무 수정"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-800 p-6 shadow-xl"
+        className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-lg font-semibold text-white">업무 수정</h3>
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">업무 수정</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">병원명</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">병원명</label>
             <input
               type="text"
               value={hospital_name}
               onChange={(e) => setHospitalName(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">업무유형</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">업무유형</label>
             <select
               value={task_type}
               onChange={(e) => setTaskType(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             >
               {TASK_TYPE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>
@@ -613,11 +577,11 @@ function EditTaskModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">담당자</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">담당자</label>
             <select
               value={assignee}
               onChange={(e) => setAssignee(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             >
               {ASSIGNEE_OPTIONS.map((a) => (
                 <option key={a} value={a}>
@@ -627,51 +591,46 @@ function EditTaskModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">마감기한</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">마감기한</label>
             <input
               type="date"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">상태</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            <label className="mb-1 block text-xs font-medium text-gray-500">상태 (담당자에 따라 자동)</label>
+            <input
+              type="text"
+              readOnly
+              value={derivedStatus}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">제목</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">제목</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">내용</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">내용</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+              className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               취소
             </button>
