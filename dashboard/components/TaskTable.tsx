@@ -385,6 +385,8 @@ export default function TaskTable({
                           setTimeout(() => setToastMessage(null), 3000);
                         }
                         router.refresh();
+                        // 카운트 등 최신 반영을 위해 잠시 후 페이지 새로고침
+                        setTimeout(() => window.location.reload(), 800);
                       }}
                       className="min-w-[150px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                     >

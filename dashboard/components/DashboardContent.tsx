@@ -115,7 +115,11 @@ export default function DashboardContent({
       </section>
 
       <section>
-        <AssigneeCards tasks={tasks} />
+        <AssigneeCards
+          tasks={tasks}
+          selectedAssignee={assigneeFilter}
+          onSelectAssignee={setAssigneeFilter}
+        />
       </section>
 
       <section>

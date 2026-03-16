@@ -31,7 +31,7 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
         {selectedAssignee && onSelectAssignee && (
           <span className="ml-2 text-sm font-normal text-blue-600">
             · <span className="font-medium">{selectedAssignee}</span> 필터 적용 중{" "}
-            <button type="button" className="underline hover:no-underline" onClick={() => onSelectAssignee(null)}>해제</button>
+            <button type="button" className="underline hover:no-underline" onClick={(e) => { e.stopPropagation(); onSelectAssignee(null); }}>해제</button>
           </span>
         )}
       </h2>
@@ -42,8 +42,12 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
             <button
               key={name}
               type="button"
-              onClick={() => isClickable && onSelectAssignee?.(selected ? null : name)}
-              className={`flex flex-col items-center justify-center rounded-xl border py-5 px-4 text-center shadow-sm transition-all ${
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isClickable && onSelectAssignee) onSelectAssignee(selected ? null : name);
+              }}
+              className={`flex flex-col items-center justify-center rounded-xl border py-5 px-4 text-center shadow-sm transition-all w-full min-h-[100px] ${
                 selected
                   ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400/50"
                   : "border-gray-100 bg-slate-50 hover:bg-slate-100 hover:border-gray-200"
