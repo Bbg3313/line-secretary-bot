@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned } from "@/lib/scheduleUtils";
-import { generateBriefingFromTasks } from "@/lib/briefingUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
-import AIBriefing from "@/components/AIBriefing";
+import AssigneeCards from "@/components/AssigneeCards";
 import TaskTable from "@/components/TaskTable";
 
 /** 5대 업무유형 카테고리 (통제소 정규화) */
@@ -22,9 +21,6 @@ export const TASK_TYPE_CATEGORIES = [
 
 type DashboardContentProps = {
   tasks: TaskRow[];
-  inboxCount: number;
-  inProgressCount: number;
-  urgentOverdueCount: number;
   hasSupabaseConfig?: boolean;
   supabaseError?: string;
 };
@@ -35,15 +31,24 @@ function is지시완료(t: TaskRow) {
 
 export default function DashboardContent({
   tasks,
-  inboxCount,
-  inProgressCount,
-  urgentOverdueCount,
 }: DashboardContentProps) {
   const router = useRouter();
   const [filterMode, setFilterMode] = useState<FilterMode>(null);
   const [quickHospital, setQuickHospital] = useState<string | null>(null);
   const [quickTaskType, setQuickTaskType] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 상단 카드 카운트: tasks 기준으로 즉시 계산 (새로고침/업데이트 후 바로 반영)
+  const { inboxCount, inProgressCount, urgentOverdueCount } = useMemo(() => {
+    const inProgress = tasks.filter(is지시완료).length;
+    const inbox = tasks.length - inProgress;
+    const urgent = tasks.filter((t) => {
+      if (is지시완료(t)) return false;
+      const deadline = t?.deadline ?? null;
+      return !!deadline && isDeadlineOverdueKST(deadline);
+    }).length;
+    return { inboxCount: inbox, inProgressCount: inProgress, urgentOverdueCount: urgent };
+  }, [tasks]);
 
   const uniqueHospitals = useMemo(() => {
     const set = new Set(tasks.map((t) => (t.hospital_name || "").trim()).filter(Boolean));
@@ -71,8 +76,6 @@ export default function DashboardContent({
     }
     return list;
   }, [tasks, filterMode, quickHospital, quickTaskType]);
-
-  const briefingText = useMemo(() => generateBriefingFromTasks(tasksToShow), [tasksToShow]);
 
   async function handleDeleteAll() {
     if (!confirm("개발용: tasks 테이블 전체 삭제합니다. 계속할까요?")) return;
@@ -107,7 +110,7 @@ export default function DashboardContent({
       </section>
 
       <section>
-        <AIBriefing text={briefingText} />
+        <AssigneeCards tasks={tasks} />
       </section>
 
       <section>

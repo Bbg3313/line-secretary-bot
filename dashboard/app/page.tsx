@@ -1,9 +1,8 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { hasSupabaseConfig, supabase, supabaseUrlPrefix } from "@/lib/supabase";
-import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned } from "@/lib/scheduleUtils";
 import DashboardContent from "@/components/DashboardContent";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 async function getChats(): Promise<{ data: ChatRow[]; error?: string }> {
   if (!hasSupabaseConfig) return { data: [] };
@@ -37,19 +36,6 @@ export default async function DashboardPage() {
   const [chatsRes, tasksRes] = await Promise.all([getChats(), getTasks()]);
   const tasks = tasksRes.data;
   const supabaseError = chatsRes.error || tasksRes.error;
-
-  // 지시 완료 = status가 지시 완료/완료/done 이거나, 담당자가 지정된 경우(구 데이터 호환)
-  const is지시완료 = (t: TaskRow) =>
-    normalizeTaskStatus(t?.status) === "지시 완료" || isAssigneeAssigned((t as { assignee?: string | null }).assignee);
-
-  // 1) 지시 대기 2) 지시 완료 3) 지연된 지시 (지시 대기 중 마감일 지남)
-  const inProgressCount = tasks.filter(is지시완료).length;
-  const inboxCount = tasks.length - inProgressCount;
-  const urgentOverdueCount = tasks.filter((t) => {
-    if (is지시완료(t)) return false;
-    const deadline = t?.deadline ?? null;
-    return !!deadline && isDeadlineOverdueKST(deadline);
-  }).length;
 
   return (
     <main className="space-y-10">
@@ -91,9 +77,6 @@ export default async function DashboardPage() {
       {hasSupabaseConfig && (
         <DashboardContent
           tasks={tasks}
-          inboxCount={inboxCount}
-          inProgressCount={inProgressCount}
-          urgentOverdueCount={urgentOverdueCount}
           hasSupabaseConfig={hasSupabaseConfig}
           supabaseError={supabaseError}
         />
