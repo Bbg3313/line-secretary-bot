@@ -4,19 +4,27 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { isDeadlineTodayKST, isDeadlineTodayOrPastKST, getTodayDateKeyKST } from "@/lib/scheduleUtils";
+import { isDeadlineOverdueKST } from "@/lib/scheduleUtils";
 import { generateBriefingFromTasks } from "@/lib/briefingUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
 import AIBriefing from "@/components/AIBriefing";
 import TaskTable from "@/components/TaskTable";
 
+/** 5대 업무유형 카테고리 (통제소 정규화) */
+export const TASK_TYPE_CATEGORIES = [
+  "광고/마케팅",
+  "콘텐츠/디자인",
+  "고객/예약(CS)",
+  "경영/행정",
+  "플랫폼/IT",
+] as const;
+
 type DashboardContentProps = {
   tasks: TaskRow[];
-  todayTaskCount: number;
-  dueTodayCount: number;
-  todayScheduleCount: number;
-  totalTasks: number;
+  inboxCount: number;
+  inProgressCount: number;
+  urgentOverdueCount: number;
   hasSupabaseConfig?: boolean;
   supabaseError?: string;
 };
@@ -25,11 +33,15 @@ function isDone(s: string | undefined) {
   return s === "완료" || s === "done";
 }
 
+function getAssignee(t: TaskRow) {
+  return ((t as any).assignee as string | null | undefined)?.trim() || "미정";
+}
+
 export default function DashboardContent({
   tasks,
-  todayTaskCount,
-  dueTodayCount,
-  todayScheduleCount,
+  inboxCount,
+  inProgressCount,
+  urgentOverdueCount,
 }: DashboardContentProps) {
   const router = useRouter();
   const [filterMode, setFilterMode] = useState<FilterMode>(null);
@@ -42,33 +54,21 @@ export default function DashboardContent({
     return Array.from(set).sort();
   }, [tasks]);
 
-  const uniqueTaskTypes = useMemo(() => {
-    const set = new Set(tasks.map((t) => (t.task_type || "").trim()).filter(Boolean));
-    return Array.from(set).sort();
-  }, [tasks]);
-
   const tasksToShow = useMemo(() => {
     let list = tasks;
-    if (filterMode === "today_task") {
-      // 오늘 마감만
-      list = list.filter((t) => isDeadlineTodayKST(t?.deadline ?? null));
-    } else if (filterMode === "urgent") {
-      // 긴급 상태이거나, 마감이 이미 지났는데 아직 완료가 아닌 업무
+    if (filterMode === "inbox") {
+      list = list.filter((t) => getAssignee(t) === "미정");
+    } else if (filterMode === "in_progress") {
+      list = list.filter((t) => getAssignee(t) !== "미정" && !isDone(t?.status));
+    } else if (filterMode === "urgent_overdue") {
       list = list.filter((t) => {
         const status = t?.status;
         const deadline = t?.deadline ?? null;
         const done = isDone(status);
-        const isUrgentStatus = status === "긴급";
-        const isOverdue =
-          !done &&
-          !!deadline &&
-          isDeadlineTodayOrPastKST(deadline) &&
-          !isDeadlineTodayKST(deadline);
-        return isUrgentStatus || isOverdue;
+        const isUrgent = status === "긴급";
+        const isOverdue = !done && !!deadline && isDeadlineOverdueKST(deadline);
+        return isUrgent || isOverdue;
       });
-    } else if (filterMode === "today_schedule") {
-      // 전체 잔여 업무: 완료가 아닌 전체
-      list = list.filter((t) => !isDone(t?.status));
     }
     if (quickHospital) {
       list = list.filter((t) => (t.hospital_name || "").trim() === quickHospital);
@@ -104,9 +104,9 @@ export default function DashboardContent({
     <>
       <section>
         <SummaryCards
-          todayTaskCount={todayTaskCount}
-          urgentCount={dueTodayCount}
-          todayScheduleCount={todayScheduleCount}
+          inboxCount={inboxCount}
+          inProgressCount={inProgressCount}
+          urgentOverdueCount={urgentOverdueCount}
           filterMode={filterMode}
           onFilter={(mode) => setFilterMode(mode)}
           onClearFilter={() => setFilterMode(null)}
@@ -129,7 +129,7 @@ export default function DashboardContent({
             setQuickTaskType(null);
           }}
           uniqueHospitals={uniqueHospitals}
-          uniqueTaskTypes={uniqueTaskTypes}
+          uniqueTaskTypes={[...TASK_TYPE_CATEGORIES]}
           quickHospital={quickHospital}
           quickTaskType={quickTaskType}
           onQuickHospitalChange={setQuickHospital}

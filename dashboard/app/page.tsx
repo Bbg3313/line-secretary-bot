@@ -1,7 +1,6 @@
 import type { ChatRow, TaskRow } from "@/lib/supabase";
 import { hasSupabaseConfig, supabase, supabaseUrlPrefix } from "@/lib/supabase";
-import { getScheduleChats } from "@/lib/classify";
-import { getDateKeyKST, getTodayDateKeyKST, isDeadlineTodayKST, isDeadlineTodayOrPastKST } from "@/lib/scheduleUtils";
+import { isDeadlineOverdueKST } from "@/lib/scheduleUtils";
 import DashboardContent from "@/components/DashboardContent";
 
 export const revalidate = 60;
@@ -24,7 +23,7 @@ async function getTasks(): Promise<{ data: TaskRow[]; error?: string }> {
   if (!hasSupabaseConfig) return { data: [] };
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, chat_id, line_user_id, line_group_id, source_message, title, description, hospital_name, task_type, status, deadline, created_at")
+    .select("id, chat_id, line_user_id, line_group_id, source_message, title, description, hospital_name, task_type, status, deadline, assignee, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
@@ -36,36 +35,29 @@ async function getTasks(): Promise<{ data: TaskRow[]; error?: string }> {
 
 export default async function DashboardPage() {
   const [chatsRes, tasksRes] = await Promise.all([getChats(), getTasks()]);
-  const chats = chatsRes.data;
   const tasks = tasksRes.data;
   const supabaseError = chatsRes.error || tasksRes.error;
-  const scheduleChats = getScheduleChats(chats);
-  const todayKey = getTodayDateKeyKST();
 
   const isDone = (s: string | undefined) => s === "완료" || s === "done";
-  const totalTasks = tasks.length;
+  const getAssignee = (t: TaskRow) => ((t as any).assignee as string | null | undefined)?.trim() || "미정";
 
-  // 1) 오늘 마감: 마감이 "오늘"인 업무 개수
-  const todayDeadlineCount = tasks.filter((t) =>
-    isDeadlineTodayKST(t?.deadline ?? null)
+  // 1) 지시 대기 (Inbox): 담당자가 '미정'인 모든 업무
+  const inboxCount = tasks.filter((t) => getAssignee(t) === "미정").length;
+
+  // 2) 실무 진행 중: 담당자 지정됨 + 완료가 아님
+  const inProgressCount = tasks.filter(
+    (t) => getAssignee(t) !== "미정" && !isDone(t?.status)
   ).length;
 
-  // 2) 긴급 · 지연: 상태가 긴급이거나, 마감이 이미 지났는데(오늘 이후 과거) 아직 완료가 아닌 업무
-  const urgentOrOverdueCount = tasks.filter((t) => {
+  // 3) 긴급 및 지연: status가 '긴급' 이거나, 마감일이 오늘보다 과거인데 완료가 아님
+  const urgentOverdueCount = tasks.filter((t) => {
     const status = t?.status;
     const deadline = t?.deadline ?? null;
     const done = isDone(status);
     const isUrgentStatus = status === "긴급";
-    const isOverdue =
-      !done &&
-      !!deadline &&
-      isDeadlineTodayOrPastKST(deadline) &&
-      !isDeadlineTodayKST(deadline);
+    const isOverdue = !done && !!deadline && isDeadlineOverdueKST(deadline);
     return isUrgentStatus || isOverdue;
   }).length;
-
-  // 3) 전체 잔여 업무: 완료가 아닌 모든 업무 개수
-  const remainingCount = tasks.filter((t) => !isDone(t?.status)).length;
 
   return (
     <main className="space-y-10">
@@ -107,10 +99,9 @@ export default async function DashboardPage() {
       {hasSupabaseConfig && (
         <DashboardContent
           tasks={tasks}
-          todayTaskCount={todayDeadlineCount}
-          dueTodayCount={urgentOrOverdueCount}
-          todayScheduleCount={remainingCount}
-          totalTasks={totalTasks}
+          inboxCount={inboxCount}
+          inProgressCount={inProgressCount}
+          urgentOverdueCount={urgentOverdueCount}
           hasSupabaseConfig={hasSupabaseConfig}
           supabaseError={supabaseError}
         />

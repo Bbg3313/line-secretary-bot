@@ -1,26 +1,34 @@
-export type FilterMode = "today_task" | "urgent" | "today_schedule" | null;
+export type FilterMode = "inbox" | "in_progress" | "urgent_overdue" | null;
 
 export type SummaryCardsProps = {
-  todayTaskCount: number;
-  urgentCount: number;
-  todayScheduleCount: number;
+  inboxCount: number;
+  inProgressCount: number;
+  urgentOverdueCount: number;
   filterMode?: FilterMode;
-  onFilter?: (mode: "today_task" | "urgent" | "today_schedule") => void;
+  onFilter?: (mode: "inbox" | "in_progress" | "urgent_overdue") => void;
   onClearFilter?: () => void;
 };
 
 export default function SummaryCards({
-  todayTaskCount,
-  urgentCount,
-  todayScheduleCount,
+  inboxCount,
+  inProgressCount,
+  urgentOverdueCount,
   filterMode = null,
   onFilter,
   onClearFilter,
 }: SummaryCardsProps) {
-  const cards: { key: "today_task" | "urgent" | "today_schedule"; label: string; value: number; unit: string; icon: string; className: string; valueClass: string }[] = [
-    { key: "today_task", label: "오늘 마감", value: todayTaskCount, unit: "건", icon: "📋", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
-    { key: "urgent", label: "긴급 · 주의", value: urgentCount, unit: "건", icon: "⚠️", className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30", valueClass: "text-amber-300" },
-    { key: "today_schedule", label: "전체 잔여 업무", value: todayScheduleCount, unit: "건", icon: "📅", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
+  const cards: {
+    key: "inbox" | "in_progress" | "urgent_overdue";
+    label: string;
+    value: number;
+    unit: string;
+    icon: string;
+    className: string;
+    valueClass: string;
+  }[] = [
+    { key: "inbox", label: "지시 대기 (Inbox)", value: inboxCount, unit: "건", icon: "📥", className: "border-slate-600/80 bg-slate-800/40 hover:bg-slate-700/50", valueClass: "text-white" },
+    { key: "in_progress", label: "실무 진행 중 (In Progress)", value: inProgressCount, unit: "건", icon: "🏃‍♂️", className: "border-sky-500/30 bg-sky-950/20 hover:bg-sky-900/30", valueClass: "text-sky-300" },
+    { key: "urgent_overdue", label: "긴급 및 지연 (Urgent/Overdue)", value: urgentOverdueCount, unit: "건", icon: "🚨", className: "border-amber-500/30 bg-amber-950/20 hover:bg-amber-900/30", valueClass: "text-amber-300" },
   ];
 
   return (

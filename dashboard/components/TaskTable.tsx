@@ -8,6 +8,7 @@ import {
   formatDeadlineWithWeekday,
   isDeadlineTodayKST,
   isDeadlineSoonKST,
+  isDeadlineOverdueKST,
 } from "@/lib/scheduleUtils";
 
 function statusLabel(s: string): string {
@@ -40,18 +41,22 @@ function truncateContent(text: string, maxLen = 80): string {
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
 
-/** 마감기한 셀: 오늘 [오늘] 빨강, 내일 [내일] 주황, 없으면 기한 없음, 형식 03/14 (토) */
+/** 마감기한 셀: 지연=빨강+[지연] 뱃지, 오늘=빨강+[오늘], 촉박=주황, 없으면 기한 없음 */
 function DeadlineCell({ deadline }: { deadline: string | null }) {
   if (!deadline || !deadline.trim()) {
     return <span className="text-slate-500">기한 없음</span>;
   }
   const text = formatDeadlineWithWeekday(deadline) || deadline.slice(0, 10);
+  const isOverdue = isDeadlineOverdueKST(deadline);
   const isToday = isDeadlineTodayKST(deadline);
-  const isSoon = isDeadlineSoonKST(deadline, 2);
+  const isSoon = !isOverdue && !isToday && isDeadlineSoonKST(deadline, 2);
   return (
-    <span className={`font-mono ${isToday ? "text-red-400" : isSoon ? "text-amber-400" : "text-slate-300"}`}>
+    <span className={`font-mono ${isOverdue ? "text-red-400" : isToday ? "text-red-400" : isSoon ? "text-amber-400" : "text-slate-300"}`}>
       {text}
-      {isToday && (
+      {isOverdue && (
+        <span className="ml-1.5 rounded bg-red-600/50 px-1.5 py-0.5 text-xs font-semibold text-red-200">🚨 [지연]</span>
+      )}
+      {isToday && !isOverdue && (
         <span className="ml-1.5 rounded bg-red-500/30 px-1.5 py-0.5 text-xs font-medium text-red-300">오늘</span>
       )}
     </span>
@@ -60,11 +65,13 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
 
 const STATUS_OPTIONS = ["대기", "진행중", "완료"] as const;
 const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
+/** 5대 업무유형 (통제소 정규화) */
+const TASK_TYPE_OPTIONS = ["광고/마케팅", "콘텐츠/디자인", "고객/예약(CS)", "경영/행정", "플랫폼/IT"] as const;
 
 type TaskTableProps = {
   tasks: TaskRow[];
   totalTaskCount?: number;
-  filterMode?: "today_task" | "urgent" | "today_schedule" | null;
+  filterMode?: "inbox" | "in_progress" | "urgent_overdue" | null;
   onClearFilter?: () => void;
   onClearAllFilters?: () => void;
   uniqueHospitals?: string[];
@@ -95,6 +102,7 @@ export default function TaskTable({
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"대기" | "진행중" | "완료" | "긴급" | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const getStatus = (row: TaskRow) => localStatus[row.id] ?? row.status ?? "대기";
   const getAssignee = (row: TaskRow) =>
@@ -208,12 +216,12 @@ export default function TaskTable({
   };
 
   const filterLabel =
-    filterMode === "today_task"
-      ? "오늘 마감"
-      : filterMode === "urgent"
-        ? "긴급 · 주의"
-        : filterMode === "today_schedule"
-          ? "전체 잔여 업무"
+    filterMode === "inbox"
+      ? "지시 대기 (Inbox)"
+      : filterMode === "in_progress"
+        ? "실무 진행 중 (In Progress)"
+        : filterMode === "urgent_overdue"
+          ? "긴급 및 지연 (Urgent/Overdue)"
           : null;
 
   return (
@@ -259,8 +267,8 @@ export default function TaskTable({
         <span className="ml-4 border-l border-slate-600/60 pl-4 text-xs font-medium uppercase tracking-wider text-slate-500">업무유형</span>
         <select
           value={quickTaskType ?? ""}
-          onChange={(e) => onQuickTaskTypeChange?.(e.target.value ? e.target.value : null)}
-          className="rounded-md border border-slate-600 bg-slate-700/80 px-2.5 py-1 text-xs text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          onChange={(e) => onQuickTaskTypeChange?.(e.target.value || null)}
+          className="rounded-md border border-slate-600 bg-slate-700/80 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 min-w-[140px]"
         >
           <option value="">전체</option>
           {uniqueTaskTypes.map((t) => (
@@ -410,6 +418,10 @@ export default function TaskTable({
                           }
                           return;
                         }
+                        if (prevAssignee === "미정" && next !== "미정") {
+                          setToastMessage(`🚀 ${next}님에게 업무가 배정되었습니다.`);
+                          setTimeout(() => setToastMessage(null), 3000);
+                        }
                         router.refresh();
                       }}
                       className="min-w-[150px] rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
@@ -505,6 +517,16 @@ export default function TaskTable({
           onClose={() => setEditRow(null)}
         />
       )}
+
+      {toastMessage && (
+        <div
+          className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-emerald-500/40 bg-slate-800 px-6 py-3 text-sm font-medium text-emerald-100 shadow-lg ring-1 ring-emerald-500/20"
+          role="status"
+          aria-live="polite"
+        >
+          {toastMessage}
+        </div>
+      )}
     </section>
   );
 }
@@ -528,7 +550,10 @@ function EditTaskModal({
   onClose: () => void;
 }) {
   const [hospital_name, setHospitalName] = useState(row.hospital_name?.trim() || "기타");
-  const [task_type, setTaskType] = useState(row.task_type?.trim() || "개인");
+  const initialTaskType = row.task_type?.trim() || "";
+  const [task_type, setTaskType] = useState(
+    (TASK_TYPE_OPTIONS as readonly string[]).includes(initialTaskType) ? initialTaskType : TASK_TYPE_OPTIONS[0]
+  );
   const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
   const [assignee, setAssignee] = useState<string>(
     ((row as any).assignee as string | null | undefined) || "미정",
@@ -541,7 +566,7 @@ function EditTaskModal({
     e.preventDefault();
     onSave({
       hospital_name: hospital_name.trim() || "기타",
-      task_type: task_type.trim() || "개인",
+      task_type: task_type.trim() || TASK_TYPE_OPTIONS[0],
       deadline: deadline.trim() || null,
       assignee: assignee.trim() || "미정",
       status,
@@ -575,12 +600,17 @@ function EditTaskModal({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">업무유형</label>
-            <input
-              type="text"
+            <select
               value={task_type}
               onChange={(e) => setTaskType(e.target.value)}
               className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-            />
+            >
+              {TASK_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">담당자</label>

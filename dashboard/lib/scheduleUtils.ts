@@ -100,6 +100,13 @@ export function isDeadlineTodayOrPastKST(deadline: string | null): boolean {
   return getDateKeyKST(deadline) <= todayKey;
 }
 
+/** 마감일이 오늘보다 과거인지(지연). 오늘/미래/기한없음은 false */
+export function isDeadlineOverdueKST(deadline: string | null): boolean {
+  if (!deadline || !deadline.trim()) return false;
+  const todayKey = getTodayDateKeyKST();
+  return getDateKeyKST(deadline) < todayKey;
+}
+
 /** 내일 날짜 키 (YYYY-MM-DD) - 한국 시간 기준 */
 export function getTomorrowDateKeyKST(): string {
   const todayKey = getTodayDateKeyKST();
