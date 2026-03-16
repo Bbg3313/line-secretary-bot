@@ -429,17 +429,30 @@ export default function TaskTable({
                   </td>
                   <td className="px-4 py-5">
                     <div className="flex flex-row flex-nowrap items-center gap-3">
-                      {!completed && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await updateStatus(row.id, "작업완료");
-                          }}
-                          className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:border-sky-400"
-                        >
-                          작업완료
-                        </button>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {!completed && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await updateStatus(row.id, "작업완료");
+                            }}
+                            className="h-7 w-12 rounded-md border border-sky-400 bg-sky-50 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 hover:border-sky-500"
+                          >
+                            완료
+                          </button>
+                        )}
+                        {completed && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await updateStatus(row.id, "지시 완료");
+                            }}
+                            className="h-7 w-12 rounded-md border border-gray-300 bg-white text-[11px] font-semibold text-gray-600 hover:bg-gray-100 hover:border-gray-400"
+                          >
+                            복구
+                          </button>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}
@@ -482,10 +495,16 @@ export default function TaskTable({
             <p className="mb-3 text-sm font-medium text-gray-900">
               {contentPopup.hospital_name?.trim() || "기타"}
             </p>
-            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형 · 담당자 · 상태</div>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</div>
+            <p className="mb-2 text-sm text-gray-700">
+              {contentPopup.task_type?.trim() || "개인"}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</div>
+            <p className="mb-2 text-sm text-gray-700">
+              {(((contentPopup as any).assignee as string | null | undefined)?.trim() || "미정")}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상태</div>
             <p className="mb-3 text-sm text-gray-700">
-              {(contentPopup.task_type || "개인")} ·{" "}
-              {(((contentPopup as any).assignee as string | null | undefined)?.trim() || "미정")} ·{" "}
               {statusLabel(contentPopup.status || "")}
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</div>
@@ -495,10 +514,6 @@ export default function TaskTable({
               ) : (
                 <span className="text-gray-500">기한 없음</span>
               )}
-            </p>
-            <div className="mb-1 mt-2 text-xs font-medium uppercase tracking-wider text-gray-500">제목</div>
-            <p className="mb-3 text-base font-semibold text-gray-900">
-              {contentPopup.title?.trim() || "—"}
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상세 내용</div>
             <p className="mb-3 whitespace-pre-wrap text-sm text-gray-700">
