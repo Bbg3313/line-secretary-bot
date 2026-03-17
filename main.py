@@ -12,7 +12,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Request
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -829,34 +829,92 @@ def _verify_line_signature(body: str, signature: str, secret: str) -> bool:
     return hmac.compare_digest(gen, signature.strip())
 
 
-async def _handle_line_webhook(request: Request):
+def _run_webhook_handler(body_str: str, signature: str) -> None:
+    """백그라운드에서 실행. 예외 나도 로그만 하고 끝 (이미 200 반환됨)."""
+    try:
+        handler.handle(body_str, signature)
+        print("[웹훅] 백그라운드 처리·답장 완료", flush=True)
+    except Exception as e:
+        import traceback
+        print(f"[웹훅] 백그라운드 처리 오류: {e}", flush=True)
+        traceback.print_exc()
+
+
+def _webhook_events_are_join_only(body_str: str) -> bool:
+    """웹훅이 join(또는 leave/follow/unfollow)만 포함하면 True. SDK 호출 없이 200만 반환하기 위함."""
+    try:
+        data = json.loads(body_str)
+        events = data.get("events")
+        if not events or not isinstance(events, list):
+            return False
+        for ev in events:
+            if not isinstance(ev, dict):
+                return False
+            t = ev.get("type")
+            if t not in ("join", "leave", "follow", "unfollow"):
+                return False
+        return True
+    except (json.JSONDecodeError, TypeError, KeyError):
+        return False
+
+
+def _log_join_leave_events(body_str: str) -> None:
+    """join/leave 관련 이벤트는 SDK 없이도 핵심 정보만 로그로 남긴다 (문제 대화방 식별용)."""
+    try:
+        data = json.loads(body_str)
+        events = data.get("events")
+        if not events or not isinstance(events, list):
+            return
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            t = ev.get("type")
+            if t not in ("join", "leave"):
+                continue
+            src = ev.get("source") if isinstance(ev.get("source"), dict) else {}
+            src_type = (src.get("type") or "").strip()
+            gid = (src.get("groupId") or "").strip()
+            rid = (src.get("roomId") or "").strip()
+            wid = (ev.get("webhookEventId") or "").strip()
+            mode = (ev.get("mode") or "").strip()
+            print(
+                f"[웹훅] {t} event src_type={src_type} groupId={gid or '-'} roomId={rid or '-'} mode={mode or '-'} webhookEventId={wid or '-'}",
+                flush=True,
+            )
+    except Exception:
+        return
+
+
+async def _handle_line_webhook(request: Request, background_tasks: BackgroundTasks):
+    # LINE은 1~2초 안에 응답 없으면 타임아웃 → 봇 퇴장. 항상 즉시 200 반환.
     signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
     body_str = body.decode("utf-8")
     print(f"[웹훅] 수신 body_len={len(body_str)}, signature={'있음' if signature else '없음'}", flush=True)
+
     if not _verify_line_signature(body_str, signature, CHANNEL_SECRET or ""):
-        print("[웹훅] 서명 오류 (CHANNEL_SECRET 또는 LINE 서명 불일치)", flush=True)
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    print("[웹훅] 서명 검증 통과, 처리 시작", flush=True)
-    try:
-        handler.handle(body_str, signature)
-        print("[웹훅] 처리·답장 완료", flush=True)
-    except Exception as e:
-        import traceback
-        print(f"[웹훅] 처리 오류 (200 반환하여 봇 퇴장 방지): {e}", flush=True)
-        traceback.print_exc()
-        # 500 반환 시 LINE이 웹훅 실패로 보고 봇을 그룹에서 퇴장시킬 수 있으므로 항상 200 반환
+        print("[웹훅] 서명 오류 (200 반환하여 봇 퇴장 방지, 처리 생략)", flush=True)
+        return {"status": "ok"}
+
+    # Join(봇 그룹 초대) 이벤트는 SDK 거치지 않고 즉시 200만 반환. SDK 예외/지연으로 퇴장 방지.
+    if _webhook_events_are_join_only(body_str):
+        _log_join_leave_events(body_str)
+        print("[웹훅] Join(또는 leave/follow/unfollow) 전용 → SDK 호출 없이 200 즉시 반환", flush=True)
+        return {"status": "ok"}
+
+    print("[웹훅] 서명 검증 통과, 200 즉시 반환 후 백그라운드 처리", flush=True)
+    background_tasks.add_task(_run_webhook_handler, body_str, signature)
     return {"status": "ok"}
 
 
 @app.post("/webhook")
-async def webhook(request: Request):
-    return await _handle_line_webhook(request)
+async def webhook(request: Request, background_tasks: BackgroundTasks):
+    return await _handle_line_webhook(request, background_tasks)
 
 
 @app.post("/callback")
-async def callback_post(request: Request):
-    return await _handle_line_webhook(request)
+async def callback_post(request: Request, background_tasks: BackgroundTasks):
+    return await _handle_line_webhook(request, background_tasks)
 
 
 if __name__ == "__main__":
