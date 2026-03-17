@@ -22,7 +22,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import FollowEvent, JoinEvent, MessageEvent, TextMessageContent
 import requests
 from google import genai
 from google.genai import errors as genai_errors
@@ -495,6 +495,29 @@ SCHEDULE_CONTENT_KEYWORDS = (
 TASK_CONTENT_KEYWORDS = (
     "할일", "해야", "업무", "미완료", "todo", "해야 할", "해야할", "과제", "제출", "마감",
 )
+# 일정/업무가 아닌 일반 대화로 볼 패턴 (저장 안내만 하고 "저장했어요" 하지 않음)
+CASUAL_CHAT_KEYWORDS = (
+    "test", "테스트", "대답해", "봇", "안녕", "ㅋ", "ㅎ", "응", "네", "뭐해", "뭐 해",
+    "그래", "알겠", "??", "?", "!", "ㅇ", "ㅂ", "ㄱ", "ㄴ", "오케이", "ok", "okay",
+)
+
+
+def is_likely_task_or_schedule(text: str) -> bool:
+    """일정/업무 성격 메시지인지 판별. False면 '저장했어요' 대신 안내만 함."""
+    t = (text or "").strip()
+    if len(t) <= 2:
+        return False
+    lower = t.lower()
+    # 짧은 메시지(20자 이하)인데 일정/업무 관련 키워드 없으면 일반 대화
+    task_schedule_keywords = SCHEDULE_CONTENT_KEYWORDS + TASK_CONTENT_KEYWORDS
+    has_keyword = any(k in t or k in lower for k in task_schedule_keywords)
+    if len(t) <= 20 and not has_keyword:
+        if any(c in t or c in lower for c in CASUAL_CHAT_KEYWORDS):
+            return False
+        # 숫자·날짜 느낌 없고 짧으면 대화로 간주 (예: "test", "비서봇 대답해봐")
+        if len(t) <= 15:
+            return False
+    return True
 
 
 def is_schedule_query(text: str) -> bool:
@@ -622,6 +645,29 @@ def format_task_reply(rows: list[dict], max_len: int = 4500) -> str:
     return text[:max_len] + ("..." if len(text) > max_len else "")
 
 
+@handler.add(JoinEvent)
+def handle_join(event: JoinEvent):
+    """봇이 그룹/단체방에 초대되었을 때. 반드시 처리해야 웹훅이 200을 반환함. 예외 시 봇이 퇴장할 수 있음."""
+    try:
+        print("[웹훅] JoinEvent 수신 (그룹/단체방 초대)", flush=True)
+        token = getattr(event, "reply_token", None)
+        if token:
+            reply_to_line(token, "안녕하세요. 일정·업무를 저장해 드리는 비서 봇이에요. 대화 내용을 보내 주시면 정리해 둘게요.")
+    except Exception as e:
+        print(f"[웹훅] JoinEvent 처리 중 오류 (봇은 유지되도록 200 반환): {e}", flush=True)
+
+
+@handler.add(FollowEvent)
+def handle_follow(event: FollowEvent):
+    """봇을 친구 추가했을 때 (1:1 채팅)."""
+    try:
+        print("[웹훅] FollowEvent 수신 (친구 추가)", flush=True)
+        token = getattr(event, "reply_token", None)
+        if token:
+            reply_to_line(token, "친구 추가해 주셔서 감사해요. 일정·업무를 말씀해 주시면 저장해 드릴게요.")
+    except Exception as e:
+        print(f"[웹훅] FollowEvent 처리 중 오류: {e}", flush=True)
+
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event: MessageEvent):
     """텍스트 수신: 조회 요청이면 일정/업무 요약 답장, 아니면 분석·저장 후 답장."""
@@ -655,7 +701,15 @@ def handle_message(event: MessageEvent):
             reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
         return
 
-    # 일반 메시지: Gemini 원자화 분석 → chats + tasks 저장 → 답장
+    # 일정/업무 성격이 아닌 일반 대화 → 저장하지 않고 안내만
+    if not is_likely_task_or_schedule(text):
+        reply_to_line(
+            event.reply_token,
+            "일정이나 할일 내용을 보내 주시면 저장해 드릴게요. (일정/업무 조회는 '일정 알려줘', '할일 뭐 있어?' 등으로 요청해 주세요.)",
+        )
+        return
+
+    # 일반 메시지(일정·업무 성격): Gemini 원자화 분석 → chats + tasks 저장 → 답장
     print(f"[웹훅] 일반 메시지 처리 시작 text_len={len(text)}", flush=True)
     summary, tasks = analyze_and_extract(text)
     has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False

@@ -131,6 +131,17 @@
 | ⑤ | **Verify** 클릭 → 성공 시 **Use** 버튼으로 저장 | |
 | ⑥ | LINE 앱에서 봇에게 메시지 보내서 응답 오는지 확인 | |
 
+### ⚠️ 그룹/단체방에 초대하면 봇이 바로 나갈 때
+
+LINE 쪽 **기본 설정** 때문에 그룹 참가가 막혀 있으면, 초대해도 봇이 곧바로 퇴장합니다. **반드시** 아래를 켜야 합니다.
+
+1. [LINE Developers Console](https://developers.line.biz/console/) → 본인 **채널** 선택
+2. **Messaging API** 탭 클릭
+3. 아래로 내려서 **"Allow bot to join group chats"** (그룹톡·멀티채팅 참가 허용) 찾기
+4. **ON(활성화)** 으로 설정
+
+이 설정이 **꺼져 있으면(기본값)** 그룹/단체방에 초대해도 LINE이 봇 참가를 허용하지 않아, 들어갔다가 곧 나가게 됩니다. 코드가 아니라 **콘솔 설정**입니다.
+
 - 무료 플랜은 **15분 비활성 시 슬립**됩니다. 그 후 첫 요청은 약 50초 지연될 수 있습니다.
 - **슬립 방지 (선택)**: [UptimeRobot](https://uptimerobot.com) 또는 [cron-job.org](https://cron-job.org)에서 **`서비스URL/ping`** (예: `https://line-secretary-bot-xxxx.onrender.com/ping`)을 **10~14분 간격**으로 GET 요청하도록 설정해 두면, 슬립되지 않아 LINE 메시지가 와도 바로 응답합니다. 15분마다 직접 깨울 필요 없음.
 - 웹훅은 **/callback** 또는 **/webhook** 둘 다 사용 가능합니다.
