@@ -648,15 +648,9 @@ def format_task_reply(rows: list[dict], max_len: int = 4500) -> str:
 
 
 @handler.add(JoinEvent)
-def handle_join(event: JoinEvent):
-    """봇이 그룹/단체방에 초대되었을 때. 반드시 처리해야 웹훅이 200을 반환함. 예외 시 봇이 퇴장할 수 있음."""
-    try:
-        print("[웹훅] JoinEvent 수신 (그룹/단체방 초대)", flush=True)
-        token = getattr(event, "reply_token", None)
-        if token:
-            reply_to_line(token, "안녕하세요. 일정·업무를 저장해 드리는 비서 봇이에요. 대화 내용을 보내 주시면 정리해 둘게요.")
-    except Exception as e:
-        print(f"[웹훅] JoinEvent 처리 중 오류 (봇은 유지되도록 200 반환): {e}", flush=True)
+def handle_join(_event: JoinEvent):
+    """봇이 그룹/단체방에 초대되었을 때. 답장 없이 200만 반환(답장 시 오류/지연 시 퇴장할 수 있어서 제거)."""
+    print("[웹훅] JoinEvent 수신 (그룹/단체방 초대)", flush=True)
 
 
 @handler.add(FollowEvent)
@@ -849,9 +843,9 @@ async def _handle_line_webhook(request: Request):
         print("[웹훅] 처리·답장 완료", flush=True)
     except Exception as e:
         import traceback
-        print(f"[웹훅] 처리 오류: {e}", flush=True)
+        print(f"[웹훅] 처리 오류 (200 반환하여 봇 퇴장 방지): {e}", flush=True)
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        # 500 반환 시 LINE이 웹훅 실패로 보고 봇을 그룹에서 퇴장시킬 수 있으므로 항상 200 반환
     return {"status": "ok"}
 
 
