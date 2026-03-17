@@ -670,7 +670,10 @@ def handle_message(event: MessageEvent):
     """텍스트 수신: 조회 요청이면 일정/업무 요약 답장, 아니면 분석·저장 후 답장."""
     user_id = getattr(event.source, "user_id", None)
     group_id = getattr(event.source, "group_id", None)
+    room_id = getattr(event.source, "room_id", None)
     text = (event.message.text or "").strip()
+    # 그룹/단체방에서는 대화가 어지러워지지 않도록 "저장/조회" 응답을 보내지 않음 (저장은 계속 수행)
+    should_reply = not (group_id or room_id)
 
     # 미완료 업무 조회 요청 (tasks 테이블 우선)
     if is_task_query(text):
@@ -679,11 +682,13 @@ def handle_message(event: MessageEvent):
             if not task_rows:
                 chat_rows = fetch_chats_from_supabase(limit=80)
                 task_rows = filter_task_rows(chat_rows)
-            reply_text = format_task_reply(task_rows)
-            reply_to_line(event.reply_token, reply_text)
+            if should_reply:
+                reply_text = format_task_reply(task_rows)
+                reply_to_line(event.reply_token, reply_text)
         except Exception as e:
             print(f"[업무 조회 실패] {e}")
-            reply_to_line(event.reply_token, "미완료 업무를 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+            if should_reply:
+                reply_to_line(event.reply_token, "미완료 업무를 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
         return
 
     # 일정/약속 조회 요청
@@ -691,11 +696,13 @@ def handle_message(event: MessageEvent):
         try:
             rows = fetch_chats_from_supabase(limit=80)
             schedule_rows = filter_schedule_rows(rows)
-            reply_text = format_schedule_reply(schedule_rows)
-            reply_to_line(event.reply_token, reply_text)
+            if should_reply:
+                reply_text = format_schedule_reply(schedule_rows)
+                reply_to_line(event.reply_token, reply_text)
         except Exception as e:
             print(f"[일정 조회 실패] {e}")
-            reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+            if should_reply:
+                reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
         return
 
     # 일정/업무 성격이 아닌 일반 대화 → 저장하지 않고 답장도 하지 않음
@@ -733,15 +740,17 @@ def handle_message(event: MessageEvent):
             tasks=tasks,
         )
         print(f"[저장] tasks OK {len(tasks)}건, 답장 전송", flush=True)
-        if len(tasks) > 1:
-            reply_to_line(event.reply_token, f"일정·업무 {len(tasks)}건 저장했어요.")
-        else:
-            reply_to_line(event.reply_token, "일정·업무 저장했어요.")
+        if should_reply:
+            if len(tasks) > 1:
+                reply_to_line(event.reply_token, f"일정·업무 {len(tasks)}건 저장했어요.")
+            else:
+                reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
         import traceback
         print(f"[저장 실패] user={user_id}, group={group_id}, err={e}", flush=True)
         traceback.print_exc()
-        reply_to_line(event.reply_token, "저장 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+        if should_reply:
+            reply_to_line(event.reply_token, "저장 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
 
 
 @handler.add(Event)
