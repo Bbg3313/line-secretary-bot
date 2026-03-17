@@ -22,7 +22,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import FollowEvent, JoinEvent, MessageEvent, TextMessageContent
+from linebot.v3.webhooks import Event, FollowEvent, JoinEvent, MessageEvent, TextMessageContent
 import requests
 from google import genai
 from google.genai import errors as genai_errors
@@ -128,6 +128,8 @@ TASK_TYPE_CATEGORIES = (
 
 # 원자화: 메시지에서 업무만 추출. JSON은 반드시 tasks 배열만 포함 (요약문/설명 없이 Task 데이터만)
 GEMINI_EXTRACT_PROMPT = """당신은 업무 추출 API입니다. 출력은 반드시 아래 형식의 JSON 하나만 하세요. 설명·마크다운·코드블록·줄바꿈 요약문 금지.
+
+중요: 메시지에 나온 업무·일정·할일을 **빠짐없이** 각각 개별 task로 추출하세요. 여러 건이면 모두 나열하고, 합치거나 생략하지 마세요.
 
 오늘 날짜: {today_ymd} ({today_weekday})
 
@@ -668,6 +670,7 @@ def handle_follow(event: FollowEvent):
     except Exception as e:
         print(f"[웹훅] FollowEvent 처리 중 오류: {e}", flush=True)
 
+
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event: MessageEvent):
     """텍스트 수신: 조회 요청이면 일정/업무 요약 답장, 아니면 분석·저장 후 답장."""
@@ -701,12 +704,8 @@ def handle_message(event: MessageEvent):
             reply_to_line(event.reply_token, "일정을 불러오다 오류가 났어요. 잠시 후 다시 시도해 주세요.")
         return
 
-    # 일정/업무 성격이 아닌 일반 대화 → 저장하지 않고 안내만
+    # 일정/업무 성격이 아닌 일반 대화 → 저장하지 않고 답장도 하지 않음
     if not is_likely_task_or_schedule(text):
-        reply_to_line(
-            event.reply_token,
-            "일정이나 할일 내용을 보내 주시면 저장해 드릴게요. (일정/업무 조회는 '일정 알려줘', '할일 뭐 있어?' 등으로 요청해 주세요.)",
-        )
         return
 
     # 일반 메시지(일정·업무 성격): Gemini 원자화 분석 → chats + tasks 저장 → 답장
@@ -740,12 +739,21 @@ def handle_message(event: MessageEvent):
             tasks=tasks,
         )
         print(f"[저장] tasks OK {len(tasks)}건, 답장 전송", flush=True)
-        reply_to_line(event.reply_token, "일정·업무 저장했어요.")
+        if len(tasks) > 1:
+            reply_to_line(event.reply_token, f"일정·업무 {len(tasks)}건 저장했어요.")
+        else:
+            reply_to_line(event.reply_token, "일정·업무 저장했어요.")
     except Exception as e:
         import traceback
         print(f"[저장 실패] user={user_id}, group={group_id}, err={e}", flush=True)
         traceback.print_exc()
         reply_to_line(event.reply_token, "저장 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+
+
+@handler.add(Event)
+def handle_other_events(_event: Event):
+    """이미지·스티커·멤버 참여/나감 등 미처리 이벤트. 예외 방지로 200 반환 → 특정 대화방에서만 봇 퇴장 방지."""
+    pass
 
 
 @app.post("/debug/insert")
