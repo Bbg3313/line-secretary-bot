@@ -8,7 +8,12 @@ export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 /** 디버그용: 연결된 Supabase URL 앞부분 (어떤 프로젝트인지 확인) */
 export const supabaseUrlPrefix = supabaseUrl ? `${supabaseUrl.slice(0, 40)}...` : "";
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    // Next 서버 컴포넌트에서 fetch 캐시로 인해 삭제/변경이 늦게 반영되는 케이스 방지
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: "no-store" }),
+  },
+});
 
 export type ChatRow = {
   id: string;
