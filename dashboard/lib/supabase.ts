@@ -31,6 +31,7 @@ export type TaskRow = {
   line_user_id: string | null;
   line_group_id: string | null;
   sender_name: string | null;
+  is_work: boolean | null;
   source_message: string | null;
   title: string | null;
   description: string | null;

@@ -105,6 +105,7 @@ export default function TaskTable({
   const [editRow, setEditRow] = useState<TaskRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"지시 대기" | "지시 완료" | "작업완료" | null>(null);
+  const [workFilter, setWorkFilter] = useState<"work" | "non_work" | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -113,6 +114,7 @@ export default function TaskTable({
     normalizeAssigneeName(
       localAssignee[row.id] ?? (((row as any).assignee as string | null | undefined) ?? null),
     );
+  const getIsWork = (row: TaskRow) => ((row as any).is_work as boolean | null | undefined) !== false;
 
   async function updateStatus(id: string, next: string) {
     setLocalStatus((prev) => ({ ...prev, [id]: next }));
@@ -138,6 +140,18 @@ export default function TaskTable({
     if (error) {
       console.error(error);
       alert("삭제 실패: " + error.message);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function toggleIsWork(row: TaskRow) {
+    const current = getIsWork(row);
+    const next = !current;
+    const { error } = await supabase.from("tasks").update({ is_work: next }).eq("id", row.id);
+    if (error) {
+      console.error(error);
+      alert("업무/비업무 변경 실패: " + error.message);
       return;
     }
     router.refresh();
@@ -187,10 +201,16 @@ export default function TaskTable({
     return label === statusFilter;
   });
 
+  const filteredByWork = filteredByStatus.filter((t) => {
+    if (!workFilter) return true;
+    const isWork = getIsWork(t);
+    return workFilter === "work" ? isWork : !isWork;
+  });
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const filteredBySearch = normalizedSearch
-    ? filteredByStatus.filter((row) => {
+    ? filteredByWork.filter((row) => {
         const hospital = (row.hospital_name || "").toLowerCase();
         const title = (row.title || "").toLowerCase();
         const desc = (row.description || "").toLowerCase();
@@ -200,7 +220,7 @@ export default function TaskTable({
           desc.includes(normalizedSearch)
         );
       })
-    : filteredByStatus;
+    : filteredByWork;
 
   // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
   const sorted = [...filteredBySearch].sort((a, b) => {
@@ -262,6 +282,25 @@ export default function TaskTable({
               onClick={() => setStatusFilter(item.key)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 statusFilter === item.key
+                  ? "bg-gray-200 text-gray-900"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+          <span className="ml-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무</span>
+          {[
+            { key: null as "work" | "non_work" | null, label: "전체" },
+            { key: "work" as const, label: "업무만" },
+            { key: "non_work" as const, label: "비업무만" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setWorkFilter(item.key)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                workFilter === item.key
                   ? "bg-gray-200 text-gray-900"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
               }`}
@@ -461,6 +500,20 @@ export default function TaskTable({
                           </button>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await toggleIsWork(row);
+                        }}
+                        className={`h-7 w-12 rounded-md border text-[11px] font-semibold ${
+                          getIsWork(row)
+                            ? "border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:border-gray-400"
+                            : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:border-rose-400"
+                        }`}
+                        title={getIsWork(row) ? "비업무로 표시" : "업무로 표시"}
+                      >
+                        {getIsWork(row) ? "비업무" : "업무"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => setEditRow(row)}

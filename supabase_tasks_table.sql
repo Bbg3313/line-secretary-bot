@@ -6,6 +6,7 @@ create table if not exists public.tasks (
   line_user_id text,
   line_group_id text,
   sender_name text,
+  is_work boolean not null default true,
   source_message text,
   hospital_name text,
   task_type text,
@@ -24,6 +25,8 @@ alter table public.tasks add column if not exists title text;
 alter table public.tasks add column if not exists assignee text;
 -- 작성자 표시이름 (LINE 프로필)
 alter table public.tasks add column if not exists sender_name text;
+-- 업무/비업무 플래그 (기본 업무)
+alter table public.tasks add column if not exists is_work boolean not null default true;
 
 -- RLS: 대시보드 anon 키로 조회·수정 가능 (필요 시 아래 두 줄 실행)
 -- alter table public.tasks enable row level security;
