@@ -7,10 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { revalidateDashboard } from "@/app/actions";
 import {
   ASSIGNEE_OPTIONS,
-  formatDeadlineWithWeekday,
-  isDeadlineTodayKST,
-  isDeadlineSoonKST,
-  isDeadlineOverdueKST,
+  getDateKeyKST,
+  getDateLabel,
   normalizeAssigneeName,
 } from "@/lib/scheduleUtils";
 
@@ -43,28 +41,10 @@ function truncateContent(text: string, maxLen = 80): string {
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
 
-/** 마감기한 셀 (라이트): 지연=빨강+[지연] 뱃지, 오늘=빨강, 촉박=주황, 없으면 기한 없음
- *  hideStatus가 true이면 [지연]/오늘 뱃지를 숨긴다 (예: 작업완료된 건)
- */
-function DeadlineCell({ deadline, hideStatus = false }: { deadline: string | null; hideStatus?: boolean }) {
-  if (!deadline || !deadline.trim()) {
-    return <span className="text-gray-500">기한 없음</span>;
-  }
-  const text = formatDeadlineWithWeekday(deadline) || deadline.slice(0, 10);
-  const isOverdue = isDeadlineOverdueKST(deadline);
-  const isToday = isDeadlineTodayKST(deadline);
-  const isSoon = !isOverdue && !isToday && isDeadlineSoonKST(deadline, 2);
-  return (
-    <span className={`font-mono ${isOverdue ? "text-red-600" : isToday ? "text-red-600" : isSoon ? "text-amber-600" : "text-gray-700"}`}>
-      {text}
-      {!hideStatus && isOverdue && (
-        <span className="ml-1.5 rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-600 border border-red-200">🚨 [지연]</span>
-      )}
-      {!hideStatus && isToday && !isOverdue && (
-        <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">오늘</span>
-      )}
-    </span>
-  );
+function ReceivedAtCell({ createdAt }: { createdAt: string }) {
+  const dateKey = getDateKeyKST(createdAt);
+  const label = getDateLabel(dateKey);
+  return <span className="font-mono text-gray-700">{label}</span>;
 }
 
 const STATUS_OPTIONS = ["지시 대기", "지시 완료", "작업완료"] as const;
@@ -167,7 +147,6 @@ export default function TaskTable({
   async function handleSaveEdit(payload: {
     hospital_name: string;
     task_type: string;
-    deadline: string | null;
     assignee?: string;
     status: string;
     title: string;
@@ -179,7 +158,6 @@ export default function TaskTable({
       .update({
         hospital_name: payload.hospital_name || "기타",
         task_type: payload.task_type || "개인",
-        deadline: payload.deadline || null,
         assignee: payload.assignee ?? getAssignee(editRow),
         status: payload.status,
         title: payload.title,
@@ -229,17 +207,8 @@ export default function TaskTable({
       })
     : filteredByWork;
 
-  // 정렬: 마감 있음 → 날짜 순, 마감 없음(기한 없음)은 가장 하단
-  const sorted = [...filteredBySearch].sort((a, b) => {
-    const da = (a.deadline || "").trim();
-    const db = (b.deadline || "").trim();
-    if (!da && !db) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    if (!da) return 1;
-    if (!db) return -1;
-    const cmp = da.localeCompare(db);
-    if (cmp !== 0) return cmp;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  // 정렬: 수신일(created_at) 최신 순
+  const sorted = [...filteredBySearch].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
 
   const displayContent = (row: TaskRow) => (row.title || row.description || "").trim() || "—";
@@ -339,7 +308,7 @@ export default function TaskTable({
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
-              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</th>
+              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</th>
               <th className="min-w-[110px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
               <th className="px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
               <th className="w-24 px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
@@ -452,7 +421,7 @@ export default function TaskTable({
                     {(row.sender_name?.trim() || "—")}
                   </td>
                   <td className="px-4 py-5 whitespace-nowrap">
-                    <DeadlineCell deadline={row.deadline} hideStatus={completed} />
+                    <ReceivedAtCell createdAt={row.created_at} />
                   </td>
                   <td className="px-4 py-5 whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
@@ -578,16 +547,9 @@ export default function TaskTable({
             <p className="mb-3 text-sm text-gray-700">
               {statusLabel(contentPopup.status || "")}
             </p>
-            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</div>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</div>
             <p className="mb-3 text-sm text-gray-700">
-              {contentPopup.deadline ? (
-                <DeadlineCell
-                  deadline={contentPopup.deadline}
-                  hideStatus={statusLabel(contentPopup.status || "") !== "지시 대기"}
-                />
-              ) : (
-                <span className="text-gray-500">기한 없음</span>
-              )}
+              <ReceivedAtCell createdAt={contentPopup.created_at} />
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상세 내용</div>
             <p className="mb-3 whitespace-pre-wrap text-sm text-gray-700">
@@ -635,7 +597,7 @@ export default function TaskTable({
   );
 }
 
-/** 수정 모달: 병원명, 마감기한, 상태, 제목, 내용 편집 후 저장 */
+/** 수정 모달: 병원명, 상태, 제목, 내용 편집 후 저장 */
 function EditTaskModal({
   row,
   onSave,
@@ -645,7 +607,6 @@ function EditTaskModal({
   onSave: (p: {
     hospital_name: string;
     task_type: string;
-    deadline: string | null;
     assignee?: string;
     status: string;
     title: string;
@@ -658,7 +619,6 @@ function EditTaskModal({
   const [task_type, setTaskType] = useState(
     (TASK_TYPE_OPTIONS as readonly string[]).includes(initialTaskType) ? initialTaskType : TASK_TYPE_OPTIONS[0]
   );
-  const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
   const [assignee, setAssignee] = useState<string>(
     normalizeAssigneeName(((row as any).assignee as string | null | undefined) ?? null),
   );
@@ -673,7 +633,6 @@ function EditTaskModal({
     onSave({
       hospital_name: hospital_name.trim() || "기타",
       task_type: task_type.trim() || TASK_TYPE_OPTIONS[0],
-      deadline: deadline.trim() || null,
       assignee: normalizeAssigneeName(assignee),
       status: derivedStatus,
       title: title.trim() || description.slice(0, 50),
@@ -731,15 +690,6 @@ function EditTaskModal({
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">마감기한</label>
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">상태 (담당자에 따라 자동)</label>
