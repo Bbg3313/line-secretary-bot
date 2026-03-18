@@ -256,10 +256,10 @@ export default function TaskTable({
               key={item.label}
               type="button"
               onClick={() => setStatusFilter(item.key)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              className={`h-7 rounded-md px-3 text-[11px] font-semibold transition ${
                 statusFilter === item.key
-                  ? "bg-gray-200 text-gray-900"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                  ? "border border-gray-400 bg-gray-100 text-gray-900"
+                  : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:border-gray-400"
               }`}
             >
               {item.label}
