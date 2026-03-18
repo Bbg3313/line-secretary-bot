@@ -52,7 +52,13 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
               } ${isClickable ? "cursor-pointer" : "cursor-default"}`}
             >
               <p className="text-3xl font-bold tabular-nums text-slate-800">{count}</p>
-              <p className="mt-2 text-sm font-medium text-gray-800 leading-snug">{name}</p>
+              <p
+                className={`mt-2 text-sm font-semibold leading-snug ${
+                  name === "미정" ? "text-red-600" : "text-gray-800"
+                }`}
+              >
+                {name}
+              </p>
               <span className="mt-1 text-xs text-gray-500">건</span>
             </button>
           );
