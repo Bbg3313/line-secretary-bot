@@ -426,7 +426,7 @@ export default function TaskTable({
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
                       <span
-                        className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
+                        className={`inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold ${statusBadgeClass(getStatus(row))}`}
                       >
                         {statusLabel(getStatus(row))}
                       </span>
