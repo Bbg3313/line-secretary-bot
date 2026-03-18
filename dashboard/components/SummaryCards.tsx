@@ -44,71 +44,66 @@ export default function SummaryCards({
   const values = { inbox: inboxCount, in_progress: inProgressCount, urgent_overdue: urgentOverdueCount };
 
   return (
-    <div className="flex justify-center">
-      <div className="grid w-full max-w-5xl gap-5 sm:grid-cols-3">
-        {CARD_CONFIG.map((card) => {
-          const value = values[card.key];
-          const active = filterMode === card.key;
-          const canClick = Boolean(onFilter || onClearFilter);
-          const handleClick = () => {
-            if (active && onClearFilter) onClearFilter();
-            else if (!active && onFilter) onFilter(card.key);
-          };
-          return (
-            <div
-              key={card.key}
-              role={canClick ? "button" : undefined}
-              tabIndex={canClick ? 0 : undefined}
-              onClick={canClick ? handleClick : undefined}
-              onKeyDown={
-                canClick
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleClick();
-                      }
+    <div className="grid gap-5 sm:grid-cols-3">
+      {CARD_CONFIG.map((card) => {
+        const value = values[card.key];
+        const active = filterMode === card.key;
+        const canClick = Boolean(onFilter || onClearFilter);
+        const handleClick = () => {
+          if (active && onClearFilter) onClearFilter();
+          else if (!active && onFilter) onFilter(card.key);
+        };
+        return (
+          <div
+            key={card.key}
+            role={canClick ? "button" : undefined}
+            tabIndex={canClick ? 0 : undefined}
+            onClick={canClick ? handleClick : undefined}
+            onKeyDown={
+              canClick
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleClick();
                     }
-                  : undefined
-              }
-              className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-200 ${
-                canClick ? "cursor-pointer hover:-translate-y-1 hover:shadow-md" : ""
-              } ${active ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-50 border-blue-200" : ""}`}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                {card.label}
-                {active && onClearFilter && (
-                  <span className="ml-2 text-blue-500">
-                    · 필터 적용 중{" "}
-                    <button type="button" className="underline" onClick={(e) => { e.stopPropagation(); onClearFilter(); }}>
-                      해제
-                    </button>
-                  </span>
-                )}
-              </p>
-              <p className="mt-3 flex items-baseline gap-1.5">
-                <span
-                  className={`text-3xl font-bold tabular-nums ${
-                    card.key === "inbox"
-                      ? "text-blue-600"
-                      : card.key === "in_progress"
-                        ? "text-emerald-500"
-                        : "text-rose-500"
-                  }`}
-                >
-                  {value}
+                  }
+                : undefined
+            }
+            className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-200 text-center ${
+              canClick ? "cursor-pointer hover:-translate-y-1 hover:shadow-md" : ""
+            } ${active ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-50 border-blue-200" : ""}`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              {card.label}
+              {active && onClearFilter && (
+                <span className="ml-2 text-blue-500">
+                  · 필터 적용 중{" "}
+                  <button type="button" className="underline" onClick={(e) => { e.stopPropagation(); onClearFilter(); }}>
+                    해제
+                  </button>
                 </span>
-                <span className="text-gray-500">건</span>
-              </p>
-              <div
-                className={`mt-3 inline-flex h-12 w-12 items-center justify-center rounded-lg p-3 ${card.iconBg} ${card.iconColor} text-2xl`}
-                aria-hidden
+              )}
+            </p>
+            <p className="mt-3 flex items-baseline justify-center gap-1.5">
+              <span
+                className={`text-3xl font-bold tabular-nums ${
+                  card.key === "inbox"
+                    ? "text-blue-600"
+                    : card.key === "in_progress"
+                      ? "text-emerald-500"
+                      : "text-rose-500"
+                }`}
               >
-                {card.icon}
-              </div>
+                {value}
+              </span>
+              <span className="text-gray-500">건</span>
+            </p>
+            <div className={`mt-3 inline-flex h-12 w-12 items-center justify-center rounded-lg p-3 ${card.iconBg} ${card.iconColor} text-2xl`} aria-hidden>
+              {card.icon}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
