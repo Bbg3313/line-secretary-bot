@@ -305,7 +305,7 @@ export default function TaskTable({
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
               <th className="min-w-[100px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
-              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
+              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
               <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</th>
@@ -353,7 +353,7 @@ export default function TaskTable({
                   <td className={`px-4 py-3 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className={`px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-4 py-3 whitespace-nowrap text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {row.task_type?.trim() || "개인"}
                   </td>
                   <td className="px-4 py-3">
