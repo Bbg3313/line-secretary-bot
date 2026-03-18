@@ -44,7 +44,7 @@ const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|
 function ReceivedAtCell({ createdAt }: { createdAt: string }) {
   const dateKey = getDateKeyKST(createdAt);
   const label = getDateLabel(dateKey);
-  return <span className="font-mono text-gray-700">{label}</span>;
+  return <span className="text-sm text-gray-700">{label}</span>;
 }
 
 const STATUS_OPTIONS = ["지시 대기", "지시 완료", "작업완료"] as const;
@@ -350,13 +350,13 @@ export default function TaskTable({
                     completed ? "opacity-60 bg-gray-50/50" : nonWork ? "opacity-50 bg-slate-50/60" : ""
                   }`}
                 >
-                  <td className={`px-4 py-5 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`px-4 py-3 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className={`px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {row.task_type?.trim() || "개인"}
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="px-4 py-3">
                     <select
                       value={getAssignee(row)}
                       onChange={async (e) => {
@@ -417,13 +417,13 @@ export default function TaskTable({
                       ))}
                     </select>
                   </td>
-                  <td className={`px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {(row.sender_name?.trim() || "—")}
                   </td>
-                  <td className="px-4 py-5 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <ReceivedAtCell createdAt={row.created_at} />
                   </td>
-                  <td className="px-4 py-5 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
                       <span
                         className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
@@ -437,7 +437,7 @@ export default function TaskTable({
                       )}
                     </div>
                   </td>
-                  <td className={`max-w-[260px] px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`max-w-[260px] px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
                       className={`max-w-full cursor-pointer text-left focus:outline-none ${
@@ -449,7 +449,7 @@ export default function TaskTable({
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="px-4 py-3">
                     <div className="flex flex-row flex-nowrap items-center gap-3">
                       <div className="flex flex-col gap-1">
                         {!completed && (
