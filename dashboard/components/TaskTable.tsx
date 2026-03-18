@@ -9,6 +9,7 @@ import {
   ASSIGNEE_OPTIONS,
   getDateKeyKST,
   getDateLabel,
+  getTodayDateKeyKST,
   normalizeAssigneeName,
 } from "@/lib/scheduleUtils";
 
@@ -41,10 +42,31 @@ function truncateContent(text: string, maxLen = 80): string {
 /** 기계 문구 제거 (일정·업무·요약 관련) */
 const GENERIC_PHRASE = /일정\s*·?\s*업무\s*요약|일정\s*업무\s*요약|업무\s*요약|^일정\s*업무\s*$/gi;
 
-function ReceivedAtCell({ createdAt }: { createdAt: string }) {
+function ReceivedAtCell({ createdAt, showDday }: { createdAt: string; showDday: boolean }) {
   const dateKey = getDateKeyKST(createdAt);
   const label = getDateLabel(dateKey);
-  return <span className="text-sm text-gray-700">{label}</span>;
+  let dday: number | null = null;
+  if (showDday) {
+    try {
+      const todayKey = getTodayDateKeyKST();
+      const received = new Date(dateKey + "T00:00:00+09:00").getTime();
+      const today = new Date(todayKey + "T00:00:00+09:00").getTime();
+      dday = Math.max(0, Math.round((today - received) / (1000 * 60 * 60 * 24)));
+    } catch {
+      dday = null;
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="text-sm text-gray-700">{label}</span>
+      {showDday && dday !== null && (
+        <span className="inline-flex h-6 items-center rounded-md border border-gray-300 bg-white px-2 text-[11px] font-semibold text-gray-700">
+          D+{dday}
+        </span>
+      )}
+    </span>
+  );
 }
 
 const STATUS_OPTIONS = ["지시 대기", "지시 완료", "작업완료"] as const;
@@ -421,7 +443,7 @@ export default function TaskTable({
                     {(row.sender_name?.trim() || "—")}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <ReceivedAtCell createdAt={row.created_at} />
+                    <ReceivedAtCell createdAt={row.created_at} showDday={statusLabel(getStatus(row)) === "지시 대기"} />
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
@@ -549,7 +571,7 @@ export default function TaskTable({
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</div>
             <p className="mb-3 text-sm text-gray-700">
-              <ReceivedAtCell createdAt={contentPopup.created_at} />
+              <ReceivedAtCell createdAt={contentPopup.created_at} showDday={statusLabel(contentPopup.status || "") === "지시 대기"} />
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상세 내용</div>
             <p className="mb-3 whitespace-pre-wrap text-sm text-gray-700">
