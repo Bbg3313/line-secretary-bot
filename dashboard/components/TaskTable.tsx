@@ -6,10 +6,12 @@ import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import { revalidateDashboard } from "@/app/actions";
 import {
+  ASSIGNEE_OPTIONS,
   formatDeadlineWithWeekday,
   isDeadlineTodayKST,
   isDeadlineSoonKST,
   isDeadlineOverdueKST,
+  normalizeAssigneeName,
 } from "@/lib/scheduleUtils";
 
 /** 상태 라벨: 지시 대기 / 지시 완료 / 작업완료 (기존 DB 값은 여기서 정규화) */
@@ -66,7 +68,6 @@ function DeadlineCell({ deadline, hideStatus = false }: { deadline: string | nul
 }
 
 const STATUS_OPTIONS = ["지시 대기", "지시 완료", "작업완료"] as const;
-const ASSIGNEE_OPTIONS = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
 /** 5대 업무유형 (통제소 정규화) */
 const TASK_TYPE_OPTIONS = ["광고/마케팅", "콘텐츠/디자인", "고객/예약(CS)", "경영/행정", "플랫폼/IT"] as const;
 
@@ -109,8 +110,9 @@ export default function TaskTable({
 
   const getStatus = (row: TaskRow) => statusLabel(localStatus[row.id] ?? row.status ?? "지시 대기");
   const getAssignee = (row: TaskRow) =>
-    localAssignee[row.id] ??
-    (((row as any).assignee as string | null | undefined)?.trim() || "미정");
+    normalizeAssigneeName(
+      localAssignee[row.id] ?? (((row as any).assignee as string | null | undefined) ?? null),
+    );
 
   async function updateStatus(id: string, next: string) {
     setLocalStatus((prev) => ({ ...prev, [id]: next }));
@@ -599,13 +601,13 @@ function EditTaskModal({
   );
   const [deadline, setDeadline] = useState(row.deadline ? row.deadline.slice(0, 10) : "");
   const [assignee, setAssignee] = useState<string>(
-    ((row as any).assignee as string | null | undefined) || "미정",
+    normalizeAssigneeName(((row as any).assignee as string | null | undefined) ?? null),
   );
   const [title, setTitle] = useState(row.title?.trim() || "");
   const [description, setDescription] = useState(row.description?.trim() || "");
 
   // 상태는 담당자에 따라 자동: 미정 → 지시 대기, 지정 → 지시 완료
-  const derivedStatus = (assignee?.trim() || "미정") === "미정" ? "지시 대기" : "지시 완료";
+  const derivedStatus = normalizeAssigneeName(assignee) === "미정" ? "지시 대기" : "지시 완료";
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -613,7 +615,7 @@ function EditTaskModal({
       hospital_name: hospital_name.trim() || "기타",
       task_type: task_type.trim() || TASK_TYPE_OPTIONS[0],
       deadline: deadline.trim() || null,
-      assignee: assignee.trim() || "미정",
+      assignee: normalizeAssigneeName(assignee),
       status: derivedStatus,
       title: title.trim() || description.slice(0, 50),
       description: description.trim() || title.trim() || "업무",

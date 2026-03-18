@@ -1,13 +1,11 @@
 "use client";
 
 import type { TaskRow } from "@/lib/supabase";
-
-const ASSIGNEE_LIST = ["미정", "대표님", "A팀장", "마케팅팀", "쏨차이(태국CS)", "베트남담당"] as const;
+import { ASSIGNEE_OPTIONS, normalizeAssigneeName } from "@/lib/scheduleUtils";
 
 function getAssignee(t: TaskRow): string {
   const a = (t as { assignee?: string | null }).assignee;
-  const s = (a ?? "").trim();
-  return s || "미정";
+  return normalizeAssigneeName(a);
 }
 
 type AssigneeCardsProps = {
@@ -17,7 +15,7 @@ type AssigneeCardsProps = {
 };
 
 export default function AssigneeCards({ tasks, selectedAssignee = null, onSelectAssignee }: AssigneeCardsProps) {
-  const counts = ASSIGNEE_LIST.map((name) => ({
+  const counts = ASSIGNEE_OPTIONS.map((name) => ({
     name,
     count: tasks.filter((t) => getAssignee(t) === name).length,
   }));

@@ -81,8 +81,30 @@ export function normalizeTaskStatus(status: string | null | undefined): "지시 
 
 /** 담당자 문자열이 '지정됨'(미정 아님)인지 */
 export function isAssigneeAssigned(assignee: string | null | undefined): boolean {
-  const a = (assignee ?? "").trim();
+  const a = normalizeAssigneeName(assignee);
   return a.length > 0 && a !== "미정";
+}
+
+export const ASSIGNEE_OPTIONS = ["미정", "대표님", "박양근", "성수린", "안효재", "니키", "정수민"] as const;
+export type AssigneeOption = (typeof ASSIGNEE_OPTIONS)[number];
+
+const ASSIGNEE_ALIAS_MAP: Record<string, AssigneeOption> = {
+  // 기존 값 호환
+  "A팀장": "박양근",
+  "마케팅팀": "성수린",
+  "쏨차이(태국CS)": "니키",
+  "베트남담당": "정수민",
+  // 공백/대소문자 변형 대비
+  "쏨차이": "니키",
+};
+
+export function normalizeAssigneeName(assignee: string | null | undefined): AssigneeOption {
+  const raw = (assignee ?? "").trim();
+  if (!raw) return "미정";
+  const mapped = ASSIGNEE_ALIAS_MAP[raw];
+  if (mapped) return mapped;
+  if ((ASSIGNEE_OPTIONS as readonly string[]).includes(raw)) return raw as AssigneeOption;
+  return raw as AssigneeOption;
 }
 
 /** 마감일(deadline)이 오늘(한국 시간)인지 여부 */

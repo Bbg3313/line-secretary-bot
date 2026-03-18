@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskRow } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned } from "@/lib/scheduleUtils";
+import { isDeadlineOverdueKST, normalizeTaskStatus, isAssigneeAssigned, normalizeAssigneeName } from "@/lib/scheduleUtils";
 import SummaryCards from "@/components/SummaryCards";
 import type { FilterMode } from "@/components/SummaryCards";
 import AssigneeCards from "@/components/AssigneeCards";
@@ -76,7 +76,7 @@ export default function DashboardContent({
       list = list.filter((t) => (t.task_type || "").trim() === quickTaskType);
     }
     if (assigneeFilter) {
-      const a = (t: TaskRow) => ((t as { assignee?: string | null }).assignee ?? "").trim() || "미정";
+      const a = (t: TaskRow) => normalizeAssigneeName((t as { assignee?: string | null }).assignee ?? null);
       list = list.filter((t) => a(t) === assigneeFilter);
     }
     return list;
