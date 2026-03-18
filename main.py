@@ -504,19 +504,149 @@ CASUAL_CHAT_KEYWORDS = (
 )
 
 
+def _strip_line_sticker_suffix(text: str) -> str:
+    """퇴근합니다 (Brown bow) 같은 스티커/꼬리표 제거 후 본문만."""
+    s = (text or "").strip()
+    s = re.sub(r"\s*[\(\（][^\)\）]{1,60}[\)\）]\s*$", "", s).strip()
+    return s
+
+
+def is_non_work_chatter(text: str) -> bool:
+    """출근/퇴근·단체방·인사·일상 잡담 등 업무 저장 대상 아님."""
+    t_main = _strip_line_sticker_suffix(text)
+    if not t_main or len(t_main) <= 1:
+        return True
+    # 이모지·특수문자만에 가까움
+    if len(re.sub(r"[\s\u3000\u200b]", "", t_main)) <= 3:
+        return True
+    noise_phrases = (
+        "퇴근", "출근", "단체방입니다", "단체방이에요", "단체방이야", "단체방이구요",
+        "그룹입니다", "채팅방입니다", "방입니다", "바이어 단체방", "한약 바이어",
+        "반갑습니다", "어서오세요", "환영합니다", "입장했습니다",
+        "수고하셨습니다", "수고했어요", "고생했어요", "좋은 밤", "좋은 주말",
+    )
+    for p in noise_phrases:
+        if p in t_main and len(t_main) <= 80:
+            return True
+    # 짧은 일상·반응만 (업무 문장 오탐 방지: 길이 제한)
+    if len(t_main) <= 40:
+        casual = (
+            "점심", "저녁", "밥", "배고파", "졸려", "커피", "잘자",
+            "내일 봐", "내일봐", "ㅋㅋ", "ㅎㅎ", "ㄹㅇ", "ㅇㅇ", "굿",
+            "nice", "thanks", "고마워요", "감사합니다", "미안해", "죄송",
+        )
+        if any(c in t_main.lower() for c in casual):
+            return True
+    if len(t_main) <= 55 and ("퇴근" in t_main or "출근" in t_main):
+        return True
+    if re.search(r"(단체방|그룹|채팅방)(이에요|입니다|이야|이구요)\s*$", t_main) and len(t_main) <= 55:
+        return True
+    if re.search(r".{0,25}(바이어|단체).{0,18}(방|그룹)", t_main) and len(t_main) <= 45:
+        return True
+    return False
+
+
+def _has_work_or_schedule_signal(text: str) -> bool:
+    """병원명·일정·업무·날짜 등 실제 업무 단서가 있는지."""
+    t = (text or "").strip()
+    lower = t.lower()
+    for k in SCHEDULE_CONTENT_KEYWORDS + TASK_CONTENT_KEYWORDS:
+        if k in t or k in lower:
+            return True
+    for alias in HOSPITAL_ALIASES:
+        if len(alias) >= 2 and (alias in t or alias.lower() in lower):
+            return True
+    for h in HOSPITAL_CANONICAL:
+        hs = str(h)
+        if len(hs) >= 2 and hs.lower() in re.sub(r"\s+", "", t).lower():
+            return True
+    if re.search(
+        r"\d{4}-\d{2}-\d{2}|\d{1,2}월\s*\d{0,2}일?|내일|모레|다음\s*주|마감|제출|보고|회의|미팅|약속|예약|리포트|세금|광고|예산|정산|발행|번역|캡션",
+        t,
+        re.I,
+    ):
+        return True
+    return False
+
+
+def _has_strong_work_signal(text: str) -> bool:
+    """병원·명확한 업무 동사·날짜. 있으면 Gemini 게이트 생략."""
+    t = (text or "").strip()
+    lower = t.lower()
+    for alias in HOSPITAL_ALIASES:
+        if len(alias) >= 2 and (alias in t or alias.lower() in lower):
+            return True
+    for h in HOSPITAL_CANONICAL:
+        hs = str(h)
+        if len(hs) >= 2 and hs.lower() in re.sub(r"\s+", "", t).lower():
+            return True
+    if re.search(
+        r"마감|제출|회의|미팅|약속|예약|리포트|보고서|세금|계산서|발행|송부|승인|처리\s*요청|"
+        r"수정\s*요청|번역|캡션|광고\s*예산|정산|VIP|CS|컴플|예약\s*확정|스케줄",
+        t,
+        re.I,
+    ):
+        return True
+    if re.search(r"\d{4}-\d{2}-\d{2}|\d{1,2}월\s*\d{1,2}일", t):
+        return True
+    if re.search(r"내일|모레|다음\s*주\s*[월화수목금토일]", t):
+        return True
+    return False
+
+
+GEMINI_WORK_GATE_PROMPT = """아래 메시지를 회사 업무용으로 DB에 남길 가치가 있는지 판단하세요.
+
+저장 O: 구체적 할 일·지시, 마감·회의·미팅·예약, 병원/브랜드 업무, 보고·제출·발송·CS·광고·정산 등 실행 가능한 업무
+저장 X: 인사·출퇴근·잡담·감정·농담·단체방 소개·일상·짧은 반응만·업무와 무관한 잡화
+
+메시지:
+{message}
+
+첫 줄에 YES 또는 NO 만 출력. 다른 글자 금지."""
+
+
+def _looks_like_thai_heavy(text: str) -> bool:
+    """태국어 업무 스레드는 한글 단서 없이도 저장 허용 (게이트 생략)."""
+    if not text:
+        return False
+    thai = sum(1 for c in text if "\u0e00" <= c <= "\u0e7f")
+    return thai >= 12 or (thai >= 6 and len(text.strip()) <= 200)
+
+
+def gemini_is_work_worth_saving(text: str) -> bool:
+    """업무 단서가 애매할 때 Gemini로 최종 판단. 실패 시 보수적으로 저장 안 함."""
+    msg = (text or "").strip()[:2000]
+    if not msg:
+        return False
+    raw = _call_gemini(GEMINI_WORK_GATE_PROMPT.format(message=msg))
+    if raw.startswith("(Gemini 오류"):
+        return False
+    first = raw.strip().splitlines()[0].strip().upper()
+    if first.startswith("NO"):
+        return False
+    if first.startswith("YES"):
+        return True
+    if "YES" in first[:20] and "NO" not in first[:10]:
+        return True
+    return False
+
+
 def is_likely_task_or_schedule(text: str) -> bool:
-    """일정/업무 성격 메시지인지 판별. False면 '저장했어요' 대신 안내만 함."""
+    """일정/업무 성격 메시지인지 판별. False면 저장·답장 안 함."""
     t = (text or "").strip()
     if len(t) <= 2:
         return False
+    if is_non_work_chatter(text):
+        return False
     lower = t.lower()
-    # 짧은 메시지(20자 이하)인데 일정/업무 관련 키워드 없으면 일반 대화
     task_schedule_keywords = SCHEDULE_CONTENT_KEYWORDS + TASK_CONTENT_KEYWORDS
     has_keyword = any(k in t or k in lower for k in task_schedule_keywords)
+    # 짧은 문장(180자 이하)인데 업무 단서 없으면 저장 안 함
+    if len(t) <= 180 and not _has_work_or_schedule_signal(text):
+        return False
     if len(t) <= 20 and not has_keyword:
         if any(c in t or c in lower for c in CASUAL_CHAT_KEYWORDS):
             return False
-        # 숫자·날짜 느낌 없고 짧으면 대화로 간주 (예: "test", "비서봇 대답해봐")
         if len(t) <= 15:
             return False
     return True
@@ -709,11 +839,21 @@ def handle_message(event: MessageEvent):
     if not is_likely_task_or_schedule(text):
         return
 
+    # 업무 단서가 약하면 Gemini 게이트 (태국어 위주 스레드는 제외)
+    if not _has_strong_work_signal(text) and not _looks_like_thai_heavy(text):
+        if not gemini_is_work_worth_saving(text):
+            print("[웹훅] 업무 게이트 NO → 저장 생략", flush=True)
+            return
+
     # 일반 메시지(일정·업무 성격): Gemini 원자화 분석 → chats + tasks 저장 → 답장
     print(f"[웹훅] 일반 메시지 처리 시작 text_len={len(text)}", flush=True)
     summary, tasks = analyze_and_extract(text)
     has_valid = any((t.get("description") or t.get("title") or "").strip() for t in tasks) if tasks else False
     if not has_valid:
+        # Gemini가 업무 0건이면 잡담을 통째로 넣지 않음. 긴 메시지(150자 초과)는 해외어 업무 가능성으로 fallback 허용
+        if len(text) <= 150 and (not _has_work_or_schedule_signal(text) or is_non_work_chatter(text)):
+            print("[웹훅] 업무 추출 0건 + 업무 단서 없음 → chats/tasks 저장 생략", flush=True)
+            return
         fallback_desc = (summary[:200] if summary and not summary.startswith("(Gemini") else text[:200].strip()) or "업무 내용"
         fallback_title = (summary[:30] if summary and "일정·업무" not in summary else text[:30].strip()) or "업무"
         extracted = _fallback_extract_from_message(text)
