@@ -148,10 +148,17 @@ export default function TaskTable({
   async function toggleIsWork(row: TaskRow) {
     const current = getIsWork(row);
     const next = !current;
-    const { error } = await supabase.from("tasks").update({ is_work: next }).eq("id", row.id);
+    const nextStatus = next ? "지시 대기" : "작업완료";
+    setLocalStatus((prev) => ({ ...prev, [row.id]: nextStatus }));
+    const { error } = await supabase.from("tasks").update({ is_work: next, status: nextStatus }).eq("id", row.id);
     if (error) {
       console.error(error);
       alert("업무/비업무 변경 실패: " + error.message);
+      setLocalStatus((prev) => {
+        const u = { ...prev };
+        delete u[row.id];
+        return u;
+      });
       return;
     }
     router.refresh();
