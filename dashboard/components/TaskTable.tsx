@@ -290,24 +290,15 @@ export default function TaskTable({
             </button>
           ))}
           <span className="ml-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무</span>
-          {[
-            { key: null as "work" | "non_work" | null, label: "전체" },
-            { key: "work" as const, label: "업무만" },
-            { key: "non_work" as const, label: "비업무만" },
-          ].map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => setWorkFilter(item.key)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                workFilter === item.key
-                  ? "bg-gray-200 text-gray-900"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          <select
+            value={workFilter ?? ""}
+            onChange={(e) => setWorkFilter((e.target.value || null) as "work" | "non_work" | null)}
+            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 min-w-[110px]"
+          >
+            <option value="">전체</option>
+            <option value="work">업무만</option>
+            <option value="non_work">비업무만</option>
+          </select>
           <span className="ml-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</span>
           <select
             value={quickTaskType ?? ""}
