@@ -36,6 +36,7 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {counts.map(({ name, count }) => {
           const selected = selectedAssignee === name;
+          const isUnassigned = name === "미정";
           return (
             <button
               key={name}
@@ -51,15 +52,15 @@ export default function AssigneeCards({ tasks, selectedAssignee = null, onSelect
                   : "border-gray-100 bg-slate-50 hover:bg-slate-100 hover:border-gray-200"
               } ${isClickable ? "cursor-pointer" : "cursor-default"}`}
             >
-              <p className="text-3xl font-bold tabular-nums text-slate-800">{count}</p>
+              <p className={`text-3xl font-bold tabular-nums ${isUnassigned ? "text-red-600" : "text-slate-800"}`}>{count}</p>
               <p
                 className={`mt-2 text-sm font-semibold leading-snug ${
-                  name === "미정" ? "text-red-600" : "text-gray-800"
+                  isUnassigned ? "text-red-600" : "text-gray-800"
                 }`}
               >
                 {name}
               </p>
-              <span className="mt-1 text-xs text-gray-500">건</span>
+              <span className={`mt-1 text-xs ${isUnassigned ? "text-red-500" : "text-gray-500"}`}>건</span>
             </button>
           );
         })}
