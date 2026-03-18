@@ -300,8 +300,8 @@ export default function TaskTable({
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
-              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</th>
-              <th className="min-w-[80px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
+              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</th>
+              <th className="min-w-[110px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
               <th className="px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
               <th className="w-24 px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
             </tr>
@@ -411,10 +411,10 @@ export default function TaskTable({
                   <td className={`px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {(row.sender_name?.trim() || "—")}
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="px-4 py-5 whitespace-nowrap">
                     <DeadlineCell deadline={row.deadline} hideStatus={completed} />
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="px-4 py-5 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
                     >
