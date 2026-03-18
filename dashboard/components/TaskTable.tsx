@@ -299,6 +299,7 @@ export default function TaskTable({
               <th className="min-w-[100px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
+              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
               <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">마감기한</th>
               <th className="min-w-[80px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
               <th className="px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
@@ -308,7 +309,7 @@ export default function TaskTable({
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center">
+                <td colSpan={8} className="py-12 text-center">
                   {totalTaskCount > 0 ? (
                     <div className="text-gray-500">
                       <p className="font-medium">필터 조건에 맞는 업무가 없어요.</p>
@@ -407,6 +408,9 @@ export default function TaskTable({
                       ))}
                     </select>
                   </td>
+                  <td className={`px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                    {(row.sender_name?.trim() || "—")}
+                  </td>
                   <td className="px-4 py-5">
                     <DeadlineCell deadline={row.deadline} hideStatus={completed} />
                   </td>
@@ -504,6 +508,10 @@ export default function TaskTable({
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</div>
             <p className="mb-2 text-sm text-gray-700">
               {(((contentPopup as any).assignee as string | null | undefined)?.trim() || "미정")}
+            </p>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</div>
+            <p className="mb-2 text-sm text-gray-700">
+              {((contentPopup.sender_name as string | null | undefined)?.trim() || "—")}
             </p>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">상태</div>
             <p className="mb-3 text-sm text-gray-700">

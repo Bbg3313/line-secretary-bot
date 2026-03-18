@@ -52,6 +52,54 @@ app = FastAPI(title="LINE Secretary Bot")
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
+_sender_name_cache: dict[str, tuple[str, float]] = {}
+
+
+def _cache_get_sender_name(key: str) -> str | None:
+    v = _sender_name_cache.get(key)
+    if not v:
+        return None
+    name, ts = v
+    # 6시간 캐시
+    if (datetime.now().timestamp() - ts) > (6 * 60 * 60):
+        _sender_name_cache.pop(key, None)
+        return None
+    return name
+
+
+def _cache_set_sender_name(key: str, name: str) -> None:
+    if not name:
+        return
+    _sender_name_cache[key] = (name, datetime.now().timestamp())
+
+
+def get_sender_display_name(*, user_id: str | None, group_id: str | None, room_id: str | None) -> str | None:
+    """LINE 프로필 API로 표시이름 조회. 실패해도 None 반환."""
+    if not user_id:
+        return None
+    cache_key = f"{group_id or '-'}|{room_id or '-'}|{user_id}"
+    cached = _cache_get_sender_name(cache_key)
+    if cached:
+        return cached
+    try:
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
+            if group_id:
+                prof = messaging_api.get_group_member_profile(group_id, user_id)
+                name = getattr(prof, "display_name", None) or getattr(prof, "displayName", None)
+            elif room_id:
+                prof = messaging_api.get_room_member_profile(room_id, user_id)
+                name = getattr(prof, "display_name", None) or getattr(prof, "displayName", None)
+            else:
+                prof = messaging_api.get_profile(user_id)
+                name = getattr(prof, "display_name", None) or getattr(prof, "displayName", None)
+            if isinstance(name, str) and name.strip():
+                _cache_set_sender_name(cache_key, name.strip())
+                return name.strip()
+    except Exception as e:
+        print(f"[LINE 프로필 조회 실패] {e}", flush=True)
+    return None
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -351,6 +399,7 @@ def save_to_supabase(
     *,
     line_user_id: str | None,
     line_group_id: str | None,
+    sender_name: str | None,
     raw_message: str,
     gemini_analysis: str,
 ) -> str | None:
@@ -358,6 +407,7 @@ def save_to_supabase(
     row = {
         "line_user_id": line_user_id,
         "line_group_id": line_group_id,
+        "sender_name": sender_name,
         "raw_message": raw_message,
         "gemini_analysis": gemini_analysis,
     }
@@ -391,6 +441,7 @@ def insert_one_task_row(
     chat_id: str | None,
     line_user_id: str | None,
     line_group_id: str | None,
+    sender_name: str | None,
     source_message: str,
     description: str,
     title: str | None = None,
@@ -406,6 +457,7 @@ def insert_one_task_row(
         "chat_id": chat_id,
         "line_user_id": line_user_id,
         "line_group_id": line_group_id,
+        "sender_name": sender_name,
         "source_message": source_message,
         "title": title_str,
         "description": desc,
@@ -426,6 +478,7 @@ def save_tasks_to_supabase(
     chat_id: str | None,
     line_user_id: str | None,
     line_group_id: str | None,
+    sender_name: str | None,
     source_message: str,
     tasks: list[dict],
 ) -> None:
@@ -462,6 +515,7 @@ def save_tasks_to_supabase(
             "chat_id": chat_id,
             "line_user_id": line_user_id,
             "line_group_id": line_group_id,
+            "sender_name": sender_name,
             "source_message": source_message,
             "title": title_str,
             "description": desc,
@@ -802,6 +856,7 @@ def handle_message(event: MessageEvent):
     group_id = getattr(event.source, "group_id", None)
     room_id = getattr(event.source, "room_id", None)
     text = (event.message.text or "").strip()
+    sender_name = get_sender_display_name(user_id=user_id, group_id=group_id, room_id=room_id)
     # 그룹/단체방에서는 대화가 어지러워지지 않도록 "저장/조회" 응답을 보내지 않음 (저장은 계속 수행)
     should_reply = not (group_id or room_id)
 
@@ -868,6 +923,7 @@ def handle_message(event: MessageEvent):
         chat_id = save_to_supabase(
             line_user_id=user_id,
             line_group_id=group_id,
+            sender_name=sender_name,
             raw_message=text,
             gemini_analysis=summary,
         )
@@ -876,6 +932,7 @@ def handle_message(event: MessageEvent):
             chat_id=chat_id,
             line_user_id=user_id,
             line_group_id=group_id,
+            sender_name=sender_name,
             source_message=text,
             tasks=tasks,
         )
@@ -907,6 +964,7 @@ async def debug_insert():
     chat_id = save_to_supabase(
         line_user_id="debug-user",
         line_group_id=None,
+        sender_name="Debug User",
         raw_message=text,
         gemini_analysis=summary,
     )
@@ -914,7 +972,7 @@ async def debug_insert():
     if not has_valid:
         extracted = _fallback_extract_from_message(text)
         tasks = [{"title": summary[:30] or text[:30], "description": text[:200], "hospital_name": extracted.get("hospital_name") or "기타", "task_type": extracted.get("task_type") or "경영/행정", "deadline": extracted.get("deadline")}]
-    save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, source_message=text, tasks=tasks)
+    save_tasks_to_supabase(chat_id=chat_id, line_user_id="debug-user", line_group_id=None, sender_name="Debug User", source_message=text, tasks=tasks)
     return {"status": "ok", "summary": summary, "tasks_count": len(tasks)}
 
 

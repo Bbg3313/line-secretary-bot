@@ -19,6 +19,7 @@ export type ChatRow = {
   id: string;
   line_user_id: string | null;
   line_group_id: string | null;
+  sender_name: string | null;
   raw_message: string;
   gemini_analysis: string | null;
   created_at: string;
@@ -29,6 +30,7 @@ export type TaskRow = {
   chat_id: string | null;
   line_user_id: string | null;
   line_group_id: string | null;
+  sender_name: string | null;
   source_message: string | null;
   title: string | null;
   description: string | null;

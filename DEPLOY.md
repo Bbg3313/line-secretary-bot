@@ -11,6 +11,8 @@
 - **지금 필요한 SQL**  
   - `tasks` 테이블에 **담당자(assignee)** 컬럼 추가:  
     프로젝트의 **`supabase_migration_assignee.sql`** 내용을 복사해 SQL Editor에 붙여넣고 **Run**.
+  - `chats` / `tasks` 테이블에 **보낸사람(sender_name)** 컬럼 추가:  
+    프로젝트의 **`supabase_migration_sender_name.sql`** 내용을 복사해 SQL Editor에 붙여넣고 **Run**. (대시보드에 “보낸사람” 표시용)
 - **앞으로**  
   - `supabase_*.sql` 이나 `*_migration_*.sql` 같은 파일이 추가/수정되면, **DEPLOY.md** 이 섹션에 "어떤 SQL을 언제 실행할지" 적어 둡니다. 배포할 때마다 이 문서를 보고 Supabase에서 실행하면 됩니다.
 

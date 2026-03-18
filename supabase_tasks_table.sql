@@ -5,6 +5,7 @@ create table if not exists public.tasks (
   chat_id uuid references public.chats(id) on delete set null,
   line_user_id text,
   line_group_id text,
+  sender_name text,
   source_message text,
   hospital_name text,
   task_type text,
@@ -21,6 +22,8 @@ alter table public.tasks add column if not exists description text;
 alter table public.tasks add column if not exists title text;
 -- 담당자 (미정이면 null 또는 '미정')
 alter table public.tasks add column if not exists assignee text;
+-- 작성자 표시이름 (LINE 프로필)
+alter table public.tasks add column if not exists sender_name text;
 
 -- RLS: 대시보드 anon 키로 조회·수정 가능 (필요 시 아래 두 줄 실행)
 -- alter table public.tasks enable row level security;

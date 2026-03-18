@@ -8,7 +8,7 @@ async function getChats(): Promise<{ data: ChatRow[]; error?: string }> {
   if (!hasSupabaseConfig) return { data: [] };
   const { data, error } = await supabase
     .from("chats")
-    .select("id, line_user_id, line_group_id, raw_message, gemini_analysis, created_at")
+    .select("id, line_user_id, line_group_id, sender_name, raw_message, gemini_analysis, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
@@ -22,7 +22,7 @@ async function getTasks(): Promise<{ data: TaskRow[]; error?: string }> {
   if (!hasSupabaseConfig) return { data: [] };
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, chat_id, line_user_id, line_group_id, source_message, title, description, hospital_name, task_type, status, deadline, assignee, created_at")
+    .select("id, chat_id, line_user_id, line_group_id, sender_name, source_message, title, description, hospital_name, task_type, status, deadline, assignee, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {

@@ -4,6 +4,7 @@ create table if not exists public.chats (
   id uuid primary key default gen_random_uuid(),
   line_user_id text,
   line_group_id text,
+  sender_name text,
   raw_message text not null,
   gemini_analysis text,
   created_at timestamptz default now()
