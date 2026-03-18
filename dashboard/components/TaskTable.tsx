@@ -366,11 +366,12 @@ export default function TaskTable({
             ) : (
               sorted.map((row) => {
                 const completed = statusLabel(getStatus(row)) === "작업완료";
+                const nonWork = !getIsWork(row);
                 return (
                 <tr
                   key={row.id}
                   className={`border-b border-gray-100 last:border-0 transition hover:bg-slate-50 ${
-                    completed ? "opacity-60 bg-gray-50/50" : ""
+                    completed ? "opacity-60 bg-gray-50/50" : nonWork ? "opacity-50 bg-slate-50/60" : ""
                   }`}
                 >
                   <td className={`px-4 py-5 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
@@ -447,11 +448,18 @@ export default function TaskTable({
                     <DeadlineCell deadline={row.deadline} hideStatus={completed} />
                   </td>
                   <td className="px-4 py-5 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
-                    >
-                      {statusLabel(getStatus(row))}
-                    </span>
+                    <div className="inline-flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold ${statusBadgeClass(getStatus(row))}`}
+                      >
+                        {statusLabel(getStatus(row))}
+                      </span>
+                      {nonWork && (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                          비업무
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className={`max-w-[260px] px-4 py-5 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
