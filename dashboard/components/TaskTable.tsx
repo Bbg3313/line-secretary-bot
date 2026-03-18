@@ -323,7 +323,7 @@ export default function TaskTable({
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
-        <table className="w-full min-w-[900px] text-left text-base">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
               <th className="min-w-[100px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
@@ -372,10 +372,10 @@ export default function TaskTable({
                     completed ? "opacity-60 bg-gray-50/50" : nonWork ? "opacity-50 bg-slate-50/60" : ""
                   }`}
                 >
-                  <td className={`px-4 py-3 font-medium text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`px-4 py-3 font-medium text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className={`px-4 py-3 whitespace-nowrap text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-4 py-3 whitespace-nowrap text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {row.task_type?.trim() || "개인"}
                   </td>
                   <td className="px-4 py-3">
@@ -439,7 +439,7 @@ export default function TaskTable({
                       ))}
                     </select>
                   </td>
-                  <td className={`px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-4 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {(row.sender_name?.trim() || "—")}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -459,7 +459,7 @@ export default function TaskTable({
                       )}
                     </div>
                   </td>
-                  <td className={`max-w-[260px] px-4 py-3 text-base ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`max-w-[260px] px-4 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
                       className={`max-w-full cursor-pointer text-left focus:outline-none ${
