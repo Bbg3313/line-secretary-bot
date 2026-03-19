@@ -323,17 +323,17 @@ export default function TaskTable({
       </div>
 
       <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="min-w-[100px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
-              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
-              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
-              <th className="min-w-[90px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
-              <th className="min-w-[140px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</th>
-              <th className="min-w-[110px] px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
-              <th className="px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
-              <th className="w-24 px-4 py-4 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
+            <tr className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50">
+              <th className="w-[90px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
+              <th className="w-[120px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
+              <th className="w-[100px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
+              <th className="w-[80px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
+              <th className="w-[120px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</th>
+              <th className="w-[90px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
+              <th className="px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
+              <th className="w-20 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -372,13 +372,13 @@ export default function TaskTable({
                     completed ? "opacity-60 bg-gray-50/50" : nonWork ? "opacity-50 bg-slate-50/60" : ""
                   }`}
                 >
-                  <td className={`px-4 py-3 font-medium text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`px-3 py-3 font-medium text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     {row.hospital_name?.trim() || "기타"}
                   </td>
-                  <td className={`px-4 py-3 whitespace-nowrap text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-3 py-3 whitespace-nowrap text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {row.task_type?.trim() || "개인"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <select
                       value={getAssignee(row)}
                       onChange={async (e) => {
@@ -430,7 +430,7 @@ export default function TaskTable({
                         router.refresh();
                         setTimeout(() => window.location.reload(), 1200);
                       }}
-                      className="min-w-[150px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="min-w-[100px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                     >
                       {ASSIGNEE_OPTIONS.map((a) => (
                         <option key={a} value={a}>
@@ -439,13 +439,13 @@ export default function TaskTable({
                       ))}
                     </select>
                   </td>
-                  <td className={`px-4 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
+                  <td className={`px-3 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-700"}`}>
                     {(row.sender_name?.trim() || "—")}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <ReceivedAtCell createdAt={row.created_at} showDday={statusLabel(getStatus(row)) === "지시 대기"} />
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
                       <span
                         className={`inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold ${statusBadgeClass(getStatus(row))}`}
@@ -459,7 +459,7 @@ export default function TaskTable({
                       )}
                     </div>
                   </td>
-                  <td className={`max-w-[260px] px-4 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`max-w-[220px] px-3 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
                       className={`max-w-full cursor-pointer text-left focus:outline-none ${
@@ -471,7 +471,7 @@ export default function TaskTable({
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex flex-row flex-nowrap items-center gap-3">
                       <div className="flex flex-col gap-1">
                         {!completed && (
