@@ -322,18 +322,18 @@ export default function TaskTable({
         </div>
       </div>
 
-      <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
-        <table className="w-full table-fixed text-left text-sm">
+      <div className="max-h-[600px] overflow-x-hidden overflow-y-auto rounded-lg border border-gray-100 scrollbar-thin">
+        <table className="w-full text-left text-sm">
           <thead>
-            <tr className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50">
-              <th className="w-[90px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
-              <th className="w-[120px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">업무유형</th>
-              <th className="w-[100px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">담당자</th>
-              <th className="w-[80px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">보낸사람</th>
-              <th className="w-[120px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">수신일</th>
-              <th className="w-[90px] px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">상태</th>
-              <th className="px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">내용</th>
-              <th className="w-20 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">관리</th>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">병원명</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[120px]">업무유형</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[100px]">담당자</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[80px]">보낸사람</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[120px]">수신일</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[90px]">상태</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[240px]">내용</th>
+              <th className="sticky top-0 z-10 bg-gray-50 px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 min-w-[120px]">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -459,10 +459,10 @@ export default function TaskTable({
                       )}
                     </div>
                   </td>
-                  <td className={`max-w-[220px] px-3 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
+                  <td className={`max-w-[240px] px-2 py-3 text-sm ${completed ? "text-gray-500" : "text-gray-900"}`}>
                     <button
                       type="button"
-                      className={`max-w-full cursor-pointer text-left focus:outline-none ${
+                      className={`w-full cursor-pointer text-left focus:outline-none ${
                         completed ? "opacity-70 text-gray-600" : "font-medium"
                       }`}
                       onClick={() => setContentPopup(row)}
@@ -471,7 +471,7 @@ export default function TaskTable({
                       <span className="block truncate">{truncatedContent(row)}</span>
                     </button>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-3">
                     <div className="flex flex-row flex-nowrap items-center gap-3">
                       <div className="flex flex-col gap-1">
                         {!completed && (
